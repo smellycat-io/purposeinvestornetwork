@@ -1,0 +1,1624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIN Survey — Shaping What Comes Next</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #1a1a18;
+    --paper: #f7f5f0;
+    --cream: #edeae2;
+    --gold: #b8860b;
+    --gold-light: #d4a017;
+    --muted: #6b6b60;
+    --border: #d4cfc4;
+    --white: #ffffff;
+    --sage: #5a6b5c;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 52px 40px 44px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 60%, rgba(184,134,11,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 20%, rgba(90,107,92,0.12) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .header-eyebrow {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 16px;
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--paper);
+    max-width: 620px;
+    margin: 0 auto 16px;
+  }
+  header h1 em { font-style: italic; color: var(--gold-light); }
+  .header-sub {
+    font-size: 14px;
+    font-weight: 300;
+    color: rgba(247,245,240,0.72);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .header-rule { width: 40px; height: 2px; background: var(--gold); margin: 24px auto 0; border: none; }
+
+  /* INTRO CARD */
+  .intro-card {
+    background: var(--cream);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+  .intro-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .intro-pill .pill-icon { font-size: 16px; }
+  .intro-pill strong { color: var(--ink); font-weight: 500; }
+  .intro-divider-v { width: 1px; height: 20px; background: var(--border); }
+
+  /* FIXED BOTTOM PROGRESS BAR */
+  .progress-bar-fixed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--white);
+    border-top: 1px solid var(--border);
+    padding: 11px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 100;
+    box-shadow: 0 -2px 14px rgba(26,26,24,0.08);
+  }
+  .progress-step-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    white-space: nowrap;
+    min-width: 84px;
+  }
+  .progress-track {
+    flex: 1;
+    height: 5px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 3px;
+    transition: width 0.45s cubic-bezier(0.4,0,0.2,1);
+    width: 0%;
+  }
+  .progress-pct {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gold);
+    min-width: 36px;
+    text-align: right;
+  }
+  body { padding-bottom: 68px; }
+
+  /* STEP CONTAINER */
+  .steps-wrap {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  .step { display: none; }
+  .step.active { display: block; animation: fadeIn 0.25s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-5px); }
+    40%       { transform: translateX(5px); }
+    60%       { transform: translateX(-4px); }
+    80%       { transform: translateX(4px); }
+  }
+
+  /* STEP HEADER */
+  .step-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .step-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.55rem;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 6px;
+    line-height: 1.2;
+  }
+  .step-desc {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 32px;
+    line-height: 1.75;
+    max-width: 560px;
+  }
+  .step-divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 32px;
+  }
+
+  /* QUESTIONS */
+  .question { margin-bottom: 28px; }
+
+  .question label,
+  .question legend {
+    display: block;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 8px;
+    line-height: 1.5;
+    border: none;
+    padding: 0;
+    float: none;
+    width: 100%;
+  }
+  .hint {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: block;
+    line-height: 1.6;
+  }
+
+  input[type="text"],
+  input[type="email"],
+  textarea,
+  select {
+    width: 100%;
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 11px 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    appearance: none;
+  }
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(184,134,11,0.11);
+  }
+  textarea { min-height: 96px; resize: vertical; line-height: 1.6; }
+
+  .option-group { display: flex; flex-direction: column; gap: 9px; }
+  .option-group.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .option-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    padding: 11px 13px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .option-item:hover { border-color: var(--gold); background: #fdf9f0; }
+  .option-item input[type="radio"],
+  .option-item input[type="checkbox"] {
+    width: 17px; height: 17px; min-width: 17px;
+    accent-color: var(--gold);
+    margin-top: 2px; cursor: pointer;
+  }
+  .option-item span { font-size: 14px; color: var(--ink); line-height: 1.5; }
+
+  /* SCALE */
+  .scale-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 7px;
+  }
+  .scale-row { display: flex; gap: 7px; }
+  .scale-btn {
+    flex: 1;
+    height: 44px;
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .scale-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .scale-btn.selected { background: var(--gold); border-color: var(--gold); color: var(--white); }
+
+  /* BRANCH GATE — big yes/no cards */
+  .gate-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 8px;
+  }
+  .gate-card {
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.18s;
+    background: var(--white);
+  }
+  .gate-card:hover { border-color: var(--gold); background: #fdf9f0; }
+  .gate-card.selected { border-color: var(--gold); background: #fdf9f0; }
+  .gate-card .gate-icon { font-size: 28px; margin-bottom: 10px; }
+  .gate-card .gate-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ink);
+    display: block;
+    margin-bottom: 5px;
+  }
+  .gate-card .gate-sub { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* NAV BUTTONS */
+  .step-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 36px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    gap: 12px;
+  }
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 13px 28px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.18s;
+    letter-spacing: 0.02em;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper);
+    min-width: 140px;
+  }
+  .btn-primary:hover { background: var(--gold); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1.5px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--ink); color: var(--ink); }
+  .btn-submit-final {
+    background: var(--gold);
+    color: var(--white);
+    min-width: 180px;
+    font-size: 15px;
+    padding: 15px 36px;
+  }
+  .btn-submit-final:hover { background: var(--ink); }
+  .btn-primary.btn-disabled {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 1;
+  }
+  .btn-primary.btn-disabled:hover { background: var(--border); }
+  .nav-spacer { flex: 1; }
+
+  /* TOAST WARNING */
+  .toast {
+    position: fixed;
+    bottom: 84px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 13.5px;
+    font-weight: 400;
+    padding: 12px 20px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(26,26,24,0.2);
+  }
+  .toast::before {
+    content: '⚠ ';
+    color: var(--gold-light);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* TRANSITION MESSAGE */
+  .transition-card {
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 6px;
+    padding: 32px 28px;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .transition-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 20% 80%, rgba(184,134,11,0.18) 0%, transparent 55%);
+    pointer-events: none;
+  }
+  .transition-card .tc-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 10px;
+  }
+  .transition-card h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+  .transition-card p {
+    font-size: 13.5px;
+    color: rgba(247,245,240,0.78);
+    line-height: 1.75;
+  }
+
+  /* SUCCESS */
+  .success-msg {
+    display: none;
+    text-align: center;
+    padding: 80px 24px;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  .success-msg .check { font-size: 44px; margin-bottom: 18px; }
+  .success-msg h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    margin-bottom: 12px;
+  }
+  .success-msg p { color: var(--muted); line-height: 1.7; }
+
+  /* FOOTER */
+  footer {
+    background: var(--cream);
+    border-top: 1px solid var(--border);
+    padding: 20px 40px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  footer strong { color: var(--ink); }
+
+  @media (max-width: 580px) {
+    header { padding: 40px 20px 32px; }
+    .option-group.grid-2 { grid-template-columns: 1fr; }
+    .gate-cards { grid-template-columns: 1fr; }
+    .scale-btn { height: 40px; font-size: 13px; }
+    .step-nav { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-eyebrow">Purpose Investor Network</div>
+  <h1>Help us build what comes <em>next.</em></h1>
+  <p class="header-sub">Your perspective — wherever you're coming from — will directly shape the new PIN: Mentoring the Next Generation.</p>
+  <hr class="header-rule">
+</header>
+
+<div class="intro-card">
+  <div class="intro-pill">
+    <span class="pill-icon">⏱</span>
+    <span>About <strong>12–15 minutes</strong> to complete</span>
+  </div>
+  <div class="intro-divider-v"></div>
+  <div class="intro-pill">
+    <span class="pill-icon">🔒</span>
+    <span>Your answers are <strong>confidential</strong></span>
+  </div>
+  <div class="intro-divider-v"></div>
+  <div class="intro-pill">
+    <span class="pill-icon">✦</span>
+    <span>Results go <strong>directly to the PIN founding team</strong></span>
+  </div>
+</div>
+
+<div class="steps-wrap">
+
+  <!-- ═══════════════════════════════════════════
+       STEP 1 — About You (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step active" id="step-1">
+    <div class="step-label" id="step1-label">Step 1 of 11</div>
+    <div class="step-title">Let's start with you.</div>
+    <p class="step-desc">A few basics to get us started. This survey takes <strong>about 12–15 minutes</strong> if you were a member of the original PIN, or around <strong>8–10 minutes</strong> if you're new to the community. Everything here is optional if you'd prefer to stay anonymous.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label for="name">Your name</label>
+      <input type="text" id="name" name="name" placeholder="First and last name">
+    </div>
+
+    <div class="question">
+      <label for="email">Email address <span style="font-weight:300;color:var(--muted)">(if you'd like us to follow up)</span></label>
+      <input type="email" id="email" name="email" placeholder="you@example.com">
+    </div>
+
+    <div class="question">
+      <label for="location">Where are you based?</label>
+      <input type="text" id="location" name="location" placeholder="City, State">
+    </div>
+
+    <div class="step-nav">
+      <span class="nav-spacer"></span>
+      <button class="btn btn-primary" onclick="goTo(2)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 2 — BRANCH GATE: Were you a PIN member?
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-2">
+    <div class="step-label">Step 2</div>
+    <div class="step-title">Were you part of the original Purpose Investor Network?</div>
+    <p class="step-desc">PIN was an impact investing community based in Utah — monthly in-person meetings, roundtables by impact area (Education, Health, Arts, Poverty, and more), vetted investment showcases, and a tracking dashboard for members.</p>
+    <div class="step-divider"></div>
+
+    <div class="gate-cards">
+      <div class="gate-card" id="gate-yes" onclick="selectGate('yes')">
+        <div class="gate-icon">✦</div>
+        <span class="gate-label">Yes, I was a member</span>
+        <span class="gate-sub">I attended meetings, participated in roundtables, or was otherwise active in the original PIN.</span>
+      </div>
+      <div class="gate-card" id="gate-no" onclick="selectGate('no')">
+        <div class="gate-icon">◇</div>
+        <span class="gate-label">No, I wasn't a member</span>
+        <span class="gate-sub">I'm new to PIN, or I'm interested in the new version but wasn't part of the original community.</span>
+      </div>
+    </div>
+    <input type="hidden" id="was-member" name="was_member">
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(1)">← Back</button>
+      <button class="btn btn-primary btn-disabled" id="gate-next" onclick="gateNextClick()">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 3M — MEMBER: Your role & time in PIN
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-3m">
+    <div class="step-label">Step 3 · Original PIN</div>
+    <div class="step-title">Your role in the original PIN</div>
+    <p class="step-desc">Tell us how you were involved and how long you were part of the community.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <fieldset>
+        <legend>How did you participate in the original PIN?</legend>
+        <span class="hint">Select all that apply.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="role" value="investor"><span>Investor member</span></label>
+          <label class="option-item"><input type="checkbox" name="role" value="financial-advisor"><span>Financial advisor</span></label>
+          <label class="option-item"><input type="checkbox" name="role" value="social-entrepreneur"><span>Social entrepreneur / investee</span></label>
+          <label class="option-item"><input type="checkbox" name="role" value="roundtable-leader"><span>Roundtable leader or organizer</span></label>
+          <label class="option-item"><input type="checkbox" name="role" value="speaker"><span>Speaker or presenter</span></label>
+          <label class="option-item"><input type="checkbox" name="role" value="other-role"><span>Other — I'll describe below</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="role-other">If other, describe your involvement:</label>
+      <input type="text" id="role-other" name="role_other" placeholder="e.g., event volunteer, partner organization…">
+    </div>
+
+    <div class="question">
+      <label for="years">Roughly how long were you involved?</label>
+      <select id="years" name="years">
+        <option value="" disabled selected>Select one</option>
+        <option value="less-than-1">Less than a year</option>
+        <option value="1-2">1–2 years</option>
+        <option value="3-4">3–4 years</option>
+        <option value="5-plus">5+ years</option>
+        <option value="unsure">Not sure</option>
+      </select>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Which philanthropic areas are you most interested in <em>now</em>?</legend>
+        <span class="hint">These may have shifted since your time with the original PIN — select all that apply today.</span>
+        <div class="option-group grid-2">
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="education"><span>Education & Youth</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="economic-mobility"><span>Economic Mobility & Poverty</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="health"><span>Health & Mental Wellness</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="arts-culture"><span>Arts, Culture & Creative Economy</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="environment"><span>Climate & Environment</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="housing"><span>Housing & Community Development</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="food"><span>Food Systems & Nutrition</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="justice"><span>Criminal Justice & Equity</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="faith"><span>Faith & Spiritual Community</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="indigenous"><span>Indigenous Sovereignty & Land</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="gender"><span>Gender Equity & Women's Empowerment</span></label>
+          <label class="option-item"><input type="checkbox" name="m_philanthropy_areas" value="other-phil"><span>Other (describe below)</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="m_philanthropy_other">Any philanthropic areas not listed that matter to you?</label>
+      <input type="text" id="m_philanthropy_other" name="m_philanthropy_other" placeholder="e.g., Rural development, Disability rights, Veterans…">
+    </div>
+
+    <div class="question">
+      <label for="m_philanthropy_shift">How have your philanthropic priorities shifted since your time with PIN — what's the same, and what's changed?</label>
+      <textarea id="m_philanthropy_shift" name="m_philanthropy_shift" placeholder="What still drives you, and what's drawn your attention in new directions…"></textarea>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Are you currently involved with any philanthropic or social ventures?</legend>
+        <span class="hint">Select all that apply.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="nonprofit-board"><span>Nonprofit board member or trustee</span></label>
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="donor"><span>Active donor or major gifts contributor</span></label>
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="founder-npo"><span>Founder or co-founder of a nonprofit or social enterprise</span></label>
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="volunteer-lead"><span>Volunteer leader or program director</span></label>
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="impact-biz"><span>Owner or investor in an impact-driven business</span></label>
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="family-fund"><span>Family foundation or donor-advised fund</span></label>
+          <label class="option-item"><input type="checkbox" name="m_social_ventures" value="none-yet"><span>Not currently — but interested in getting more involved</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="m_ventures_describe">Tell us about the ventures or organizations you're most invested in right now — what are they doing, and what's your role?</label>
+      <span class="hint">Skip if not applicable.</span>
+      <textarea id="m_ventures_describe" name="m_ventures_describe" placeholder="Organization name, what they do, your involvement…"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(2)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo('4m')">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 4M — MEMBER: Reflecting on old PIN
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-4m">
+    <div class="step-label">Step 4 · Original PIN</div>
+    <div class="step-title">Reflecting on the experience</div>
+    <p class="step-desc">No filter needed here. We want to know what actually worked, what didn't, and what made it worth showing up.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label>How valuable were the monthly in-person meetings overall?</label>
+      <div class="scale-labels"><span>Not valuable</span><span>Extremely valuable</span></div>
+      <div class="scale-row" id="scale-meetings">
+        <button type="button" class="scale-btn" onclick="setScale('scale-meetings',1)">1</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-meetings',2)">2</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-meetings',3)">3</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-meetings',4)">4</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-meetings',5)">5</button>
+      </div>
+      <input type="hidden" id="scale-meetings-val" name="meeting_value">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Which part of the monthly format did you find most valuable?</legend>
+        <span class="hint">Pick your top two.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="meeting-part" value="educate"><span><strong>Educate</strong> — the speaker / lecture portion</span></label>
+          <label class="option-item"><input type="checkbox" name="meeting-part" value="invest"><span><strong>Invest</strong> — the investment showcase presentations</span></label>
+          <label class="option-item"><input type="checkbox" name="meeting-part" value="roundtable"><span><strong>Roundtables</strong> — breaking out by impact area</span></label>
+          <label class="option-item"><input type="checkbox" name="meeting-part" value="network"><span><strong>Networking</strong> — food and open mingling</span></label>
+          <label class="option-item"><input type="checkbox" name="meeting-part" value="location"><span><strong>The venue</strong> — curated locations added real meaning</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Which roundtable(s) were you most engaged with?</legend>
+        <div class="option-group grid-2">
+          <label class="option-item"><input type="checkbox" name="roundtable" value="education"><span>Education</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="poverty"><span>Poverty & Economic Mobility</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="health"><span>Health & Wellness</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="arts"><span>The Arts</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="environment"><span>Environment / Climate</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="housing"><span>Housing</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="other-rt"><span>Other</span></label>
+          <label class="option-item"><input type="checkbox" name="roundtable" value="multiple"><span>I moved between several</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="rt-other-name">If "Other," which roundtable?</label>
+      <input type="text" id="rt-other-name" name="rt_other" placeholder="e.g., Criminal Justice Reform, Food Systems…">
+    </div>
+
+    <div class="question">
+      <label>How valuable was the online investment tracking dashboard?</label>
+      <div class="scale-labels"><span>Not valuable</span><span>Extremely valuable</span></div>
+      <div class="scale-row" id="scale-dashboard">
+        <button type="button" class="scale-btn" onclick="setScale('scale-dashboard',1)">1</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dashboard',2)">2</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dashboard',3)">3</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dashboard',4)">4</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dashboard',5)">5</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dashboard',0)">N/A</button>
+      </div>
+      <input type="hidden" id="scale-dashboard-val" name="dashboard_value">
+    </div>
+
+    <div class="question">
+      <label for="best-thing">What did the original PIN do better than anything else you've experienced in impact investing?</label>
+      <textarea id="best-thing" name="best_thing" placeholder="The thing that made it irreplaceable…"></textarea>
+    </div>
+
+    <div class="question">
+      <label for="what-missed">What did you wish PIN had done differently, or what was consistently missing?</label>
+      <textarea id="what-missed" name="what_missed" placeholder="Be honest — this is exactly what we need to hear."></textarea>
+    </div>
+
+    <div class="question">
+      <label for="why-stopped">If your involvement decreased or ended, what was the main reason?</label>
+      <textarea id="why-stopped" name="why_stopped" placeholder="Life changes, format, community, geography — whatever it was."></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo('3m')">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(5)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 3N — NON-MEMBER: How they heard about PIN
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-3n">
+    <div class="step-label">Step 3</div>
+    <div class="step-title">How did you come across PIN?</div>
+    <p class="step-desc">We'd love to know what brought you here and what drew you to the new vision.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label>How did you hear about the new Purpose Investor Network?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="how_heard" value="referral"><span>Someone referred me — a friend, colleague, or fellow investor</span></label>
+        <label class="option-item"><input type="radio" name="how_heard" value="social"><span>Social media or online</span></label>
+        <label class="option-item"><input type="radio" name="how_heard" value="event"><span>An event or conference</span></label>
+        <label class="option-item"><input type="radio" name="how_heard" value="iileaders"><span>Through IILeaders or the Bassett network</span></label>
+        <label class="option-item"><input type="radio" name="how_heard" value="pen"><span>Through the Purpose Entrepreneur Network (PEN)</span></label>
+        <label class="option-item"><input type="radio" name="how_heard" value="other-heard"><span>Other</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label for="why-interested">What made you want to fill out this survey? What about PIN interests you?</label>
+      <textarea id="why-interested" name="why_interested" placeholder="The mission, a specific person, the investment model — whatever it is…"></textarea>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Which philanthropic areas are you most interested in?</legend>
+        <span class="hint">Select all that apply — this helps us understand where you'd want to plug in.</span>
+        <div class="option-group grid-2">
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="education"><span>Education & Youth</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="economic-mobility"><span>Economic Mobility & Poverty</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="health"><span>Health & Mental Wellness</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="arts-culture"><span>Arts, Culture & Creative Economy</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="environment"><span>Climate & Environment</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="housing"><span>Housing & Community Development</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="food"><span>Food Systems & Nutrition</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="justice"><span>Criminal Justice & Equity</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="faith"><span>Faith & Spiritual Community</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="indigenous"><span>Indigenous Sovereignty & Land</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="gender"><span>Gender Equity & Women's Empowerment</span></label>
+          <label class="option-item"><input type="checkbox" name="n_philanthropy_areas" value="other-phil"><span>Other (describe below)</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="n_philanthropy_other">Any philanthropic areas not listed that matter to you?</label>
+      <input type="text" id="n_philanthropy_other" name="n_philanthropy_other" placeholder="e.g., Rural development, Disability rights, Veterans…">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Are you currently involved with any philanthropic or social ventures?</legend>
+        <span class="hint">Select all that apply.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="nonprofit-board"><span>Nonprofit board member or trustee</span></label>
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="donor"><span>Active donor or major gifts contributor</span></label>
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="founder-npo"><span>Founder or co-founder of a nonprofit or social enterprise</span></label>
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="volunteer-lead"><span>Volunteer leader or program director</span></label>
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="impact-biz"><span>Owner or investor in an impact-driven business</span></label>
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="family-fund"><span>Family foundation or donor-advised fund</span></label>
+          <label class="option-item"><input type="checkbox" name="n_social_ventures" value="none-yet"><span>Not currently — but interested in getting more involved</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="n_ventures_describe">Tell us about the ventures or organizations you're most involved with — what are they doing, and what's your role?</label>
+      <span class="hint">Skip if not applicable.</span>
+      <textarea id="n_ventures_describe" name="n_ventures_describe" placeholder="Organization name, what they do, your involvement…"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(2)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(5)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 5 — How You Invest Today (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-5">
+    <div class="step-label">Step 5</div>
+    <div class="step-title">How you invest today</div>
+    <p class="step-desc">We want to understand your process and instincts — where you actually are, not where you think you should be.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label>How did you find your most recent investment?</label>
+      <span class="hint">Where did the deal actually come from.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="last_deal_source" value="network-personal"><span>Personal network — a friend, colleague, or trusted contact brought it to me</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="angel-group"><span>An angel group or investor network</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="platform"><span>An online platform — AngelList, Wefunder, Republic, or similar</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="founder-direct"><span>A founder approached me directly</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="advisor-fa"><span>A financial advisor or broker brought it to me</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="event"><span>A conference, demo day, or pitch event</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="own-research"><span>My own research — I sought it out independently</span></label>
+        <label class="option-item"><input type="radio" name="last_deal_source" value="other-source"><span>Other</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Who or what was involved in your decision to make that investment?</legend>
+        <span class="hint">Select all that played a real role.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="trusted-coinvestor"><span>A trusted co-investor was already in — I followed their conviction</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="own-dd"><span>My own due diligence</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="group-dd"><span>Group due diligence — a committee or network vetted it</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="founder-connection"><span>My relationship with the founder — I believed in the person</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="domain-knowledge"><span>My own domain knowledge in the sector</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="impact-mission"><span>The mission or impact thesis aligned with my values</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="financial-terms"><span>The financial terms or valuation were compelling</span></label>
+          <label class="option-item"><input type="checkbox" name="decision_factors" value="gut"><span>Honestly — gut feeling</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="decision_open">What does your actual vetting process look like — from first introduction to writing a check?</label>
+      <textarea id="decision_open" name="decision_process" placeholder="How long does it take? Who do you talk to? What would make you pass?"></textarea>
+    </div>
+
+    <div class="question">
+      <label>How has your investing style changed over the past 3–5 years?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="style_change" value="more-selective"><span>More selective — I pass on more deals than I used to</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="more-active"><span>More active — I'm looking for more opportunities than before</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="more-impact"><span>Impact has become more central — I weight mission more heavily now</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="less-impact"><span>I've pulled back from impact — prioritizing financial returns more</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="more-relationships"><span>More relationship-driven — I mostly invest with people I know</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="shifted-sectors"><span>My sector focus has shifted — interested in different areas now</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="paused"><span>Slowed down or paused — life or market conditions changed my pace</span></label>
+        <label class="option-item"><input type="radio" name="style_change" value="same"><span>My approach hasn't changed much</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label for="style_evolution_open">Say more about how your investing thinking has evolved — what changed, and why?</label>
+      <textarea id="style_evolution_open" name="style_evolution" placeholder="Wins, losses, life events, or just a shift in perspective…"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" id="step5-back" onclick="goBackFrom5()">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(6)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 6 — Impact Investing Philosophy (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-6">
+    <div class="step-label">Step 6</div>
+    <div class="step-title">Impact investing — where you stand</div>
+    <p class="step-desc">No right answers here. We want to know where impact actually sits in your thinking right now.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label>How would you describe your current interest in impact investing?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="impact_interest" value="core"><span>It's the core of my portfolio strategy — I screen for impact first</span></label>
+        <label class="option-item"><input type="radio" name="impact_interest" value="significant"><span>Significant — impact is a major factor alongside financial return</span></label>
+        <label class="option-item"><input type="radio" name="impact_interest" value="growing"><span>Growing — I'm more interested than I used to be</span></label>
+        <label class="option-item"><input type="radio" name="impact_interest" value="occasional"><span>Occasional — I participate when the right deal comes along</span></label>
+        <label class="option-item"><input type="radio" name="impact_interest" value="curious"><span>Curious but cautious — still figuring out how it fits</span></label>
+        <label class="option-item"><input type="radio" name="impact_interest" value="skeptical-impact"><span>Skeptical — I question whether impact investing delivers on its promises</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label>Roughly what percentage of your portfolio is impact-oriented today?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="impact_pct" value="none"><span>None — it's not currently in my portfolio</span></label>
+        <label class="option-item"><input type="radio" name="impact_pct" value="under-10"><span>Under 10%</span></label>
+        <label class="option-item"><input type="radio" name="impact_pct" value="10-25"><span>10–25%</span></label>
+        <label class="option-item"><input type="radio" name="impact_pct" value="25-50"><span>25–50%</span></label>
+        <label class="option-item"><input type="radio" name="impact_pct" value="50-75"><span>50–75%</span></label>
+        <label class="option-item"><input type="radio" name="impact_pct" value="over-75"><span>Over 75% — impact is the primary lens</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Which impact areas matter most to you right now?</legend>
+        <span class="hint">Pick your top three.</span>
+        <div class="option-group grid-2">
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="education"><span>Education & Workforce</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="economic-mobility"><span>Economic Mobility & Poverty</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="health"><span>Health & Mental Wellness</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="arts-culture"><span>Arts, Culture & Creative Economy</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="environment"><span>Climate & Environment</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="housing"><span>Housing & Community</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="food"><span>Food Systems & Nutrition</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="justice"><span>Criminal Justice & Equity</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="tech-access"><span>Technology Access & Digital Equity</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="indigenous"><span>Indigenous Sovereignty & Land</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="gender"><span>Gender Equity & Women's Economic Power</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_areas_now" value="other-impact"><span>Other (describe below)</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="impact_areas_other">Any impact areas not listed that you care about?</label>
+      <input type="text" id="impact_areas_other" name="impact_areas_other" placeholder="e.g., Rural development, Faith-based community, Disability rights…">
+    </div>
+
+    <div class="question">
+      <label for="impact_shift">How has your impact focus shifted over time — what drew you before vs. what draws you now?</label>
+      <textarea id="impact_shift" name="impact_shift" placeholder="What's changed, and what prompted the shift?"></textarea>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>What's genuinely missing from impact investing today?</legend>
+        <span class="hint">Select all that resonate.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="measurement"><span>Credible impact measurement — too much self-reporting</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="returns"><span>Competitive returns — impact deals ask investors to sacrifice too much</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="deal-quality"><span>Quality deal flow — great impact businesses are hard to find</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="community"><span>Real community — most impact investing is transactional, not relational</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="transparency"><span>Transparency — too easy to greenwash</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="access"><span>Broader access — the best deals still flow to insiders</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="pipeline"><span>A reliable founder pipeline — entrepreneurs aren't being developed well enough</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="next-gen"><span>Next-generation investors — the community skews too old</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="geographic"><span>Geographic diversity — too concentrated in a few cities</span></label>
+          <label class="option-item"><input type="checkbox" name="impact_gaps" value="long-term"><span>Long-term thinking — exit pressure conflicts with real impact timelines</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="impact_missing_open">Anything else that's missing that no one has addressed?</label>
+      <textarea id="impact_missing_open" name="impact_missing_open" placeholder="The problem no one is naming, or the solution no one has built yet…"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(5)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(7)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 7 — Portfolio frustrations + Mentoring + Children (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-7">
+    <div class="step-label">Step 7</div>
+    <div class="step-title">Frustrations, legacy & the next generation</div>
+    <p class="step-desc">What's not working in your investing life right now — and what motivates you when you look further ahead than the next deal.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <fieldset>
+        <legend>What are your biggest frustrations with your investing portfolio right now?</legend>
+        <span class="hint">Select all that apply.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="deal-flow"><span>Not enough quality deal flow — I want to invest more but can't find the right opportunities</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="bad-returns"><span>Underperforming returns — some investments haven't gone the way I hoped</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="illiquidity"><span>Illiquidity — capital is tied up longer than expected</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="no-visibility"><span>Lack of visibility — I don't have a clear picture of how my portfolio is performing</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="no-community"><span>Investing in isolation — no trusted group to think through deals with</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="impact-proof"><span>No way to verify impact — I don't know if my impact investments are doing what they claim</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="concentration"><span>Too concentrated — overexposed in a few sectors or geographies</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="time"><span>Time — due diligence and portfolio management take more bandwidth than I have</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="founder-support"><span>Founders need more support than I can give</span></label>
+          <label class="option-item"><input type="checkbox" name="portfolio_frustrations" value="no-frustration"><span>I'm honestly pretty satisfied with where things are</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="frustrations_open">What's the one frustration you'd most want solved — the thing that would change how you invest if it were fixed?</label>
+      <textarea id="frustrations_open" name="frustrations_open" placeholder="The gap you keep working around…"></textarea>
+    </div>
+
+    <div class="question">
+      <label>How important is mentoring the next generation of investors and entrepreneurs to you personally?</label>
+      <div class="scale-labels"><span>Not a priority</span><span>A defining part of why I invest</span></div>
+      <div class="scale-row" id="scale-mentoring">
+        <button type="button" class="scale-btn" onclick="setScale('scale-mentoring',1)">1</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-mentoring',2)">2</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-mentoring',3)">3</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-mentoring',4)">4</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-mentoring',5)">5</button>
+      </div>
+      <input type="hidden" id="scale-mentoring-val" name="mentoring_importance">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>What draws you to mentoring the next generation?</legend>
+        <span class="hint">Select all that resonate — skip if mentorship isn't a current priority.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="legacy"><span>Legacy — I want what I've learned to outlast me</span></label>
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="better-deals"><span>Better deals — mentoring founders earlier means better opportunities later</span></label>
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="give-back"><span>Giving back — someone invested in me; it's my turn</span></label>
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="fresh-perspective"><span>Fresh perspective — younger founders challenge my thinking in useful ways</span></label>
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="community-health"><span>Community health — impact investing won't survive if we don't build the next generation</span></label>
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="personal-family"><span>Personal — I'm thinking about my own children or family members</span></label>
+          <label class="option-item"><input type="checkbox" name="mentoring_why" value="energizing"><span>It's energizing — I find working with early-stage people motivating</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="mentoring_experience">Have you mentored a founder, young investor, or early-career professional before? What worked, what didn't?</label>
+      <textarea id="mentoring_experience" name="mentoring_experience" placeholder="Formal or informal, brief or long-term — any experience counts…"></textarea>
+    </div>
+
+    <div class="question">
+      <label>Do you have children?</label>
+      <span class="hint">We ask because it often shapes how people think about legacy, generational wealth, and what "mentoring the next generation" means to them personally.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="has_children" value="yes-young"><span>Yes — and they're young (under 18)</span></label>
+        <label class="option-item"><input type="radio" name="has_children" value="yes-adult"><span>Yes — and they're adults</span></label>
+        <label class="option-item"><input type="radio" name="has_children" value="yes-mixed"><span>Yes — a mix of ages</span></label>
+        <label class="option-item"><input type="radio" name="has_children" value="no"><span>No</span></label>
+        <label class="option-item"><input type="radio" name="has_children" value="prefer-not"><span>Prefer not to say</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label for="children_investing">Are any of your children or family members interested in investing or entrepreneurship — or is that something you'd want to cultivate?</label>
+      <span class="hint">Skip if not applicable.</span>
+      <textarea id="children_investing" name="children_investing" placeholder="Any spark already there, or a hope you're carrying for them…"></textarea>
+    </div>
+
+    <div class="question">
+      <label>How involved are your children in the family business or your professional work?</label>
+      <span class="hint">Skip if not applicable.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="children_family_biz" value="actively-involved"><span>Actively involved — they work in or alongside the business</span></label>
+        <label class="option-item"><input type="radio" name="children_family_biz" value="learning-exposed"><span>Exposed but not yet involved — they know what I do and I'm bringing them along</span></label>
+        <label class="option-item"><input type="radio" name="children_family_biz" value="interested-not-yet"><span>Interested, but not involved yet — I'd like to change that</span></label>
+        <label class="option-item"><input type="radio" name="children_family_biz" value="not-involved"><span>Not involved — they're pursuing their own paths</span></label>
+        <label class="option-item"><input type="radio" name="children_family_biz" value="too-young"><span>Too young to be involved yet</span></label>
+        <label class="option-item"><input type="radio" name="children_family_biz" value="na-no-biz"><span>Not applicable — no family business</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label>How involved are your children in their own projects, ventures, or entrepreneurial pursuits?</label>
+      <span class="hint">Skip if not applicable.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="children_own_projects" value="actively-building"><span>Actively building something — they have a real project, business, or venture underway</span></label>
+        <label class="option-item"><input type="radio" name="children_own_projects" value="exploring"><span>Exploring ideas — they're curious and experimenting but nothing formal yet</span></label>
+        <label class="option-item"><input type="radio" name="children_own_projects" value="interested-needs-push"><span>Interested but needs encouragement — the spark is there, they just need a push</span></label>
+        <label class="option-item"><input type="radio" name="children_own_projects" value="not-yet"><span>Not yet — they're focused on school, other interests, or just finding their way</span></label>
+        <label class="option-item"><input type="radio" name="children_own_projects" value="too-young-proj"><span>Too young to know yet</span></label>
+        <label class="option-item"><input type="radio" name="children_own_projects" value="na-no-children"><span>Not applicable</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label for="children_projects_detail">Tell us more — what are they working on, or what would you most want to see them pursue?</label>
+      <span class="hint">Optional, but this helps us understand how PIN could serve the next generation in your own family.</span>
+      <textarea id="children_projects_detail" name="children_projects_detail" placeholder="Their project, their interests, or what you hope for them…"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(6)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(8)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 8 — Angel Groups & Investing Landscape (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-8">
+    <div class="step-label">Step 8</div>
+    <div class="step-title">Your investing landscape</div>
+    <p class="step-desc">Understanding where you already invest and what groups you belong to helps us design PIN to complement — not duplicate — what you already have.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Are you currently a member of any angel investing groups or networks?</legend>
+        <div class="option-group">
+          <label class="option-item"><input type="radio" name="angel_member" value="yes-active"><span>Yes, and I'm actively participating</span></label>
+          <label class="option-item"><input type="radio" name="angel_member" value="yes-passive"><span>Yes, but I'm mostly passive / inactive</span></label>
+          <label class="option-item"><input type="radio" name="angel_member" value="was"><span>I was previously, but no longer</span></label>
+          <label class="option-item"><input type="radio" name="angel_member" value="no"><span>No — PIN would be my primary group</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="angel_groups_names">Which groups or networks are you part of (or have been)?</label>
+      <span class="hint">National networks, local chapters, online platforms, syndicates — anything counts.</span>
+      <textarea id="angel_groups_names" name="angel_groups_names" style="min-height:80px;" placeholder="e.g., Keiretsu Forum, AngelList syndicates, local angel chapter, family office network…"></textarea>
+    </div>
+
+    <div class="question">
+      <label for="angel_fee_range">What do those memberships typically cost you annually?</label>
+      <span class="hint">Ballpark is fine — this helps us benchmark PIN's pricing.</span>
+      <select id="angel_fee_range" name="angel_fee_range">
+        <option value="" disabled selected>Select a range</option>
+        <option value="free">Free / no membership fee</option>
+        <option value="under-500">Under $500/year</option>
+        <option value="500-1500">$500–$1,500/year</option>
+        <option value="1500-3000">$1,500–$3,000/year</option>
+        <option value="3000-5000">$3,000–$5,000/year</option>
+        <option value="5000-plus">$5,000+/year</option>
+        <option value="varies">Varies / deal-by-deal only</option>
+        <option value="na">Not applicable</option>
+      </select>
+    </div>
+
+    <div class="question">
+      <label>How would you rate the quality of deal flow through those groups?</label>
+      <div class="scale-labels"><span>Poor / not relevant</span><span>Excellent / high signal</span></div>
+      <div class="scale-row" id="scale-dealflow">
+        <button type="button" class="scale-btn" onclick="setScale('scale-dealflow',1)">1</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dealflow',2)">2</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dealflow',3)">3</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dealflow',4)">4</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dealflow',5)">5</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-dealflow',0)">N/A</button>
+      </div>
+      <input type="hidden" id="scale-dealflow-val" name="dealflow_quality">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>What do you genuinely like about the groups you've been part of?</legend>
+        <span class="hint">Select all that resonate.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="deal-quality"><span>Quality and vetting of deals presented</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="co-investors"><span>The caliber of co-investors in the room</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="education"><span>Educational content and investor development</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="networking"><span>Relationship building and networking</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="community"><span>A sense of shared mission or community</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="access"><span>Access to deal flow I couldn't find on my own</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="low-minimums"><span>Ability to invest at lower minimums through syndication</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_likes" value="transparency"><span>Transparency in how decisions and terms are structured</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>What frustrates you most about angel groups you've experienced?</legend>
+        <span class="hint">Select all that apply — be blunt.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="poor-deals"><span>Deal flow that isn't relevant or well-vetted</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="high-fees"><span>Membership fees that don't feel worth it</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="cliquey"><span>Insular or cliquey culture — hard to break in</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="no-mission"><span>No real sense of purpose or shared values beyond profit</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="poor-followup"><span>Poor follow-through after meetings — deals don't move</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="boring-events"><span>Events that feel like a chore rather than something to look forward to</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="lack-diversity"><span>Lack of diversity in perspectives, backgrounds, or investment areas</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="too-passive"><span>Too passive — I want more active involvement and mentorship opportunities</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="geography"><span>Geography — limited to one city or region</span></label>
+          <label class="option-item"><input type="checkbox" name="angel_dislikes" value="no-tracking"><span>No good way to track investments or portfolio performance</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="angel_gap">What's the gap that no angel group or impact network has filled for you yet?</label>
+      <textarea id="angel_gap" name="angel_gap" placeholder="The thing you keep wishing existed…"></textarea>
+    </div>
+
+    <div class="question">
+      <label for="angel_differentiator">What would make PIN clearly different — and better — than the groups you've experienced?</label>
+      <textarea id="angel_differentiator" name="angel_differentiator" placeholder="What would make you choose PIN as your primary community?"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(7)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(9)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 9 — The New PIN Vision (everyone, with transition card)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-9">
+    <div class="step-label">Step 9</div>
+    <div class="step-title">The new PIN: Mentoring the Next Generation</div>
+    <p class="step-desc">Here's what we're building — and we want to know where you fit in.</p>
+    <div class="step-divider"></div>
+
+    <div class="transition-card">
+      <div class="tc-eyebrow">The Vision</div>
+      <h3>A national community. A mentorship pipeline. Deal flow that means something.</h3>
+      <p>PIN is being rebuilt with an online-first model (Google Meet), in-person events at rotating locations nationwide streamed live, a pipeline from next-gen entrepreneurs through the PIN Ignite Accelerator into vetted deals, roundtable-specific events throughout the month, and a rebuilt annual conference.</p>
+    </div>
+
+    <div class="question">
+      <label>How interested are you in being part of the new PIN?</label>
+      <div class="scale-labels"><span>Not at all</span><span>Absolutely in</span></div>
+      <div class="scale-row" id="scale-interest">
+        <button type="button" class="scale-btn" onclick="setScale('scale-interest',1)">1</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-interest',2)">2</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-interest',3)">3</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-interest',4)">4</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-interest',5)">5</button>
+      </div>
+      <input type="hidden" id="scale-interest-val" name="interest_level">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>What role would you most want to play in the new PIN?</legend>
+        <span class="hint">Select all that apply.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="new-role" value="investor-member"><span>Active investor member — reviewing and investing in vetted deals</span></label>
+          <label class="option-item"><input type="checkbox" name="new-role" value="roundtable-lead"><span>Roundtable leader — stewarding a focus area community</span></label>
+          <label class="option-item"><input type="checkbox" name="new-role" value="mentor"><span>Mentor — working directly with next-gen founders or investors</span></label>
+          <label class="option-item"><input type="checkbox" name="new-role" value="speaker"><span>Speaker or subject matter expert</span></label>
+          <label class="option-item"><input type="checkbox" name="new-role" value="advisor"><span>Advisory or financial services (per established community guidelines)</span></label>
+          <label class="option-item"><input type="checkbox" name="new-role" value="observer"><span>Observer for now — I want to see how it develops first</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label>How do you feel about the shift to online-first meetings?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="online_feel" value="love-it"><span>I love it — makes it accessible wherever I am</span></label>
+        <label class="option-item"><input type="radio" name="online_feel" value="fine"><span>Fine with it — I understand the tradeoffs</span></label>
+        <label class="option-item"><input type="radio" name="online_feel" value="skeptical"><span>Skeptical — the in-person experience was a big part of the value</span></label>
+        <label class="option-item"><input type="radio" name="online_feel" value="mixed"><span>Mixed — online works for some things, but I'll miss the energy in the room</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label for="online-networking">The networking portion is harder to replicate online. What would make virtual networking feel meaningful to you?</label>
+      <textarea id="online-networking" name="online_networking" placeholder="Breakout rooms, pre-meeting intros, structured conversations, something else…"></textarea>
+    </div>
+
+    <div class="question">
+      <label>How often would you like to see scheduled online educational meetups — even if you can't attend them all?</label>
+      <span class="hint">Think of this as the cadence you'd want on the calendar, regardless of your personal availability.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="edu_meetup_freq" value="multiple-per-week"><span>Multiple per week</span></label>
+        <label class="option-item"><input type="radio" name="edu_meetup_freq" value="once-per-week"><span>Once per week</span></label>
+        <label class="option-item"><input type="radio" name="edu_meetup_freq" value="multiple-per-month"><span>Multiple per month</span></label>
+        <label class="option-item"><input type="radio" name="edu_meetup_freq" value="once-per-month"><span>Once per month</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label>How often would you be able to attend Roundtable meetups — where your voice is actually heard?</label>
+      <span class="hint">This is about your realistic participation, not just what you'd put on your calendar.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="roundtable_attend_freq" value="multiple-per-week"><span>Multiple per week</span></label>
+        <label class="option-item"><input type="radio" name="roundtable_attend_freq" value="once-per-week"><span>Once per week</span></label>
+        <label class="option-item"><input type="radio" name="roundtable_attend_freq" value="multiple-per-month"><span>Multiple per month</span></label>
+        <label class="option-item"><input type="radio" name="roundtable_attend_freq" value="once-per-month"><span>Once per month</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label>How excited are you about the mentorship pipeline — connecting next-gen founders through the accelerator into PIN's deal flow?</label>
+      <div class="scale-labels"><span>Not my focus</span><span>This is why I'd join</span></div>
+      <div class="scale-row" id="scale-pipeline">
+        <button type="button" class="scale-btn" onclick="setScale('scale-pipeline',1)">1</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-pipeline',2)">2</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-pipeline',3)">3</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-pipeline',4)">4</button>
+        <button type="button" class="scale-btn" onclick="setScale('scale-pipeline',5)">5</button>
+      </div>
+      <input type="hidden" id="scale-pipeline-val" name="pipeline_excitement">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>Which roundtable focus areas would you want to be active in?</legend>
+        <span class="hint">Select all that interest you.</span>
+        <div class="option-group grid-2">
+          <label class="option-item"><input type="checkbox" name="new-rt" value="education"><span>Education</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="economic-mobility"><span>Economic Mobility</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="health"><span>Health & Wellness</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="arts-culture"><span>Arts & Culture</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="environment"><span>Environment & Climate</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="housing"><span>Housing & Community</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="food-systems"><span>Food Systems</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="justice"><span>Criminal Justice & Equity</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="tech-access"><span>Technology Access</span></label>
+          <label class="option-item"><input type="checkbox" name="new-rt" value="new-area"><span>A new area (I'll name it below)</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label for="new-area-name">If you'd advocate for a new roundtable focus area, what would it be?</label>
+      <input type="text" id="new-area-name" name="new_area" placeholder="e.g., Mental Health, Rural Communities, Indigenous Sovereignty…">
+    </div>
+
+    <div class="question">
+      <label>How important is the annual conference to you?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="conference" value="essential"><span>Essential — it should be a cornerstone of the calendar</span></label>
+        <label class="option-item"><input type="radio" name="conference" value="nice-to-have"><span>Nice to have, but not a dealbreaker</span></label>
+        <label class="option-item"><input type="radio" name="conference" value="skip"><span>I'd rather see resources go toward more frequent smaller events</span></label>
+        <label class="option-item"><input type="radio" name="conference" value="no-opinion"><span>No strong opinion</span></label>
+      </div>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(8)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(10)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 10 — Membership & Commitment (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-10">
+    <div class="step-label">Step 10</div>
+    <div class="step-title">Membership & commitment</div>
+    <p class="step-desc">Help us understand what a fair and motivating structure looks like — and how much of yourself you could realistically give.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label>What membership structure resonates most with you?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="membership_model" value="annual-flat"><span>Annual flat membership fee — simple and predictable</span></label>
+        <label class="option-item"><input type="radio" name="membership_model" value="tiered"><span>Tiered membership — different access levels at different price points</span></label>
+        <label class="option-item"><input type="radio" name="membership_model" value="deal-based"><span>No membership fee — carry interest or transaction-based model</span></label>
+        <label class="option-item"><input type="radio" name="membership_model" value="hybrid"><span>Hybrid — a base fee plus deal-by-deal participation</span></label>
+        <label class="option-item"><input type="radio" name="membership_model" value="no-opinion-mem"><span>No strong preference</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label>If PIN charges an annual membership fee, what feels like a fair range for full access?</label>
+      <span class="hint">Think about what you're getting: curated deal flow, monthly meetings, roundtable community, mentorship opportunities, and the investment dashboard.</span>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="price_range" value="under-250"><span>Under $250/year — I'd only join at this price</span></label>
+        <label class="option-item"><input type="radio" name="price_range" value="250-500"><span>$250–$500/year</span></label>
+        <label class="option-item"><input type="radio" name="price_range" value="500-1000"><span>$500–$1,000/year</span></label>
+        <label class="option-item"><input type="radio" name="price_range" value="1000-2500"><span>$1,000–$2,500/year</span></label>
+        <label class="option-item"><input type="radio" name="price_range" value="2500-plus"><span>$2,500+/year — if the quality and access warrant it</span></label>
+        <label class="option-item"><input type="radio" name="price_range" value="no-fee"><span>I wouldn't pay a membership fee regardless of structure</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>If PIN offered tiered membership, which benefits would justify a higher tier?</legend>
+        <span class="hint">Select all that would move you up.</span>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="early-deals"><span>First look / priority access to investment opportunities</span></label>
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="smaller-groups"><span>Exclusive smaller-group roundtables or dinners</span></label>
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="mentorship-access"><span>Direct mentorship matching with next-gen founders</span></label>
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="dashboard-plus"><span>Advanced portfolio tracking and reporting</span></label>
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="advisory-role"><span>An advisory or governance role within PIN</span></label>
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="conf-included"><span>Annual conference included</span></label>
+          <label class="option-item"><input type="checkbox" name="tier_drivers" value="branding"><span>Recognition as a founding or legacy member</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="question">
+      <label>How often could you realistically attend events?</label>
+      <div class="option-group">
+        <label class="option-item"><input type="radio" name="commitment" value="weekly"><span>Weekly or more</span></label>
+        <label class="option-item"><input type="radio" name="commitment" value="biweekly"><span>Every other week</span></label>
+        <label class="option-item"><input type="radio" name="commitment" value="monthly"><span>Once a month</span></label>
+        <label class="option-item"><input type="radio" name="commitment" value="quarterly"><span>Quarterly — larger events only</span></label>
+        <label class="option-item"><input type="radio" name="commitment" value="async"><span>Mostly asynchronous — I engage on my own time</span></label>
+      </div>
+    </div>
+
+    <div class="question">
+      <label for="network-bring">Who in your network would you want to see at the table? What type of person or organization has been missing from these conversations?</label>
+      <textarea id="network-bring" name="network_bring" placeholder="Types of people, sectors, regions, perspectives…"></textarea>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(9)">← Back</button>
+      <button class="btn btn-primary" onclick="goTo(11)">Next →</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STEP 11 — Anything Else (everyone)
+  ════════════════════════════════════════════ -->
+  <div class="step" id="step-11">
+    <div class="step-label">Last step</div>
+    <div class="step-title">Anything else?</div>
+    <p class="step-desc">The floor is yours. And thank you — this is exactly the kind of input that shapes what gets built.</p>
+    <div class="step-divider"></div>
+
+    <div class="question">
+      <label for="open-thoughts">Is there anything about your experience, or about the new PIN vision, that you want to make sure the founding team hears?</label>
+      <textarea id="open-thoughts" name="open_thoughts" placeholder="The floor is yours." style="min-height:130px;"></textarea>
+    </div>
+
+    <div class="question">
+      <label for="refer">Is there someone — from the original PIN or someone who should be part of the new one — that we should reach out to?</label>
+      <input type="text" id="refer" name="referral" placeholder="Name and/or email if you have it">
+    </div>
+
+    <div class="question">
+      <fieldset>
+        <legend>How would you like us to follow up?</legend>
+        <div class="option-group">
+          <label class="option-item"><input type="checkbox" name="follow-up" value="updates"><span>Send me updates on the relaunch</span></label>
+          <label class="option-item"><input type="checkbox" name="follow-up" value="interview"><span>I'm open to a 20-minute follow-up conversation</span></label>
+          <label class="option-item"><input type="checkbox" name="follow-up" value="early-access"><span>Put me on the early access / founding member list</span></label>
+          <label class="option-item"><input type="checkbox" name="follow-up" value="no-follow"><span>No follow-up needed — just wanted to share my thoughts</span></label>
+        </div>
+      </fieldset>
+    </div>
+
+    <div class="step-nav">
+      <button class="btn btn-ghost" onclick="goTo(10)">← Back</button>
+      <button class="btn btn-submit-final" onclick="handleSubmit()">Submit →</button>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="success-msg" id="success">
+    <div class="check">✦</div>
+    <h2>Thank you.</h2>
+    <p>Your responses have been received and will go directly to the PIN founding team. We'll be in touch as the new PIN takes shape.</p>
+  </div>
+
+</div><!-- /steps-wrap -->
+
+<footer>
+  <strong>Purpose Investor Network</strong> &nbsp;·&nbsp; Mentoring the Next Generation &nbsp;·&nbsp; purposeinvestornetwork.org
+</footer>
+
+<script>
+  // ── State ──
+  let wasMember = null;
+
+  // Step order depends on branch:
+  // Everyone:  1 → 2 → [3m/3n] → 4m (member only) → 5 → 6 → 7 → 8 → 9 → 10 → 11
+  // Member:    1 → 2 → 3m → 4m → 5 → 6 → 7 → 8 → 9 → 10 → 11
+  // Non-member: 1 → 2 → 3n → 5 → 6 → 7 → 8 → 9 → 10 → 11
+
+  // Total visible steps per path:
+  const TOTAL_MEMBER = 11;     // steps 1,2,3m,4m,5,6,7,8,9,10,11 = 11
+  const TOTAL_NONMEMBER = 9;   // steps 1,2,3n,5,6,7,8,9,10,11 = 10... label as 9 visible
+
+  // Step number display map (what to show in progress)
+  function getStepNum(stepId) {
+    const memberOrder = ['1','2','3m','4m','5','6','7','8','9','10','11'];
+    const nonOrder    = ['1','2','3n','5','6','7','8','9','10','11'];
+    const order = wasMember === false ? nonOrder : memberOrder;
+    const idx = order.indexOf(String(stepId));
+    return idx === -1 ? 1 : idx + 1;
+  }
+  function getTotalSteps() {
+    return wasMember === false ? 10 : 11;
+  }
+
+  // ── Navigation ──
+  function goTo(stepId) {
+    const all = document.querySelectorAll('.step');
+    all.forEach(s => s.classList.remove('active'));
+    const target = document.getElementById('step-' + stepId);
+    if (target) {
+      target.classList.add('active');
+      updateProgress(stepId);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function updateProgress(stepId) {
+    const num = getStepNum(stepId);
+    const total = getTotalSteps();
+    const pct = Math.round((num / total) * 100);
+    const fill        = document.getElementById('progress-fill');
+    const label       = document.getElementById('progress-label');
+    const pctEl       = document.getElementById('progress-pct');
+    const stepOneLbl  = document.querySelector('#step-1 .step-label');
+    if (fill)       fill.style.width = pct + '%';
+    if (label)      label.textContent = 'Step ' + num + ' of ' + total;
+    if (pctEl)      pctEl.textContent = pct + '%';
+    if (stepOneLbl) stepOneLbl.textContent = 'Step 1 of ' + total;
+  }
+
+  // ── Gate logic ──
+  let toastTimer = null;
+
+  function selectGate(choice) {
+    wasMember = (choice === 'yes');
+    document.getElementById('was-member').value = choice;
+    document.getElementById('gate-yes').classList.toggle('selected', choice === 'yes');
+    document.getElementById('gate-no').classList.toggle('selected', choice === 'no');
+    // Enable the Next button
+    const btn = document.getElementById('gate-next');
+    btn.classList.remove('btn-disabled');
+  }
+
+  function gateNextClick() {
+    if (wasMember === null) {
+      showToast();
+    } else {
+      goTo(wasMember ? '3m' : '3n');
+    }
+  }
+
+  function showToast() {
+    const toast = document.getElementById('gate-toast');
+    toast.classList.add('show');
+    // Shake the gate cards to draw attention
+    const cards = document.querySelectorAll('.gate-card');
+    cards.forEach(c => {
+      c.style.animation = 'none';
+      c.offsetHeight; // reflow
+      c.style.animation = 'shake 0.35s ease';
+    });
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+
+  // Back from step 5 goes to correct previous step
+  function goBackFrom5() {
+    goTo(wasMember ? '4m' : '3n');
+  }
+
+  // ── Scale buttons ──
+  function setScale(groupId, value) {
+    const row = document.getElementById(groupId);
+    const btns = row.querySelectorAll('.scale-btn');
+    btns.forEach(b => b.classList.remove('selected'));
+    if (value === 0) {
+      btns[btns.length - 1].classList.add('selected');
+    } else {
+      btns[value - 1].classList.add('selected');
+    }
+    document.getElementById(groupId + '-val').value = value === 0 ? 'N/A' : value;
+  }
+
+  // ── Submit ──
+  function handleSubmit() {
+    document.querySelectorAll('.step').forEach(s => s.style.display = 'none');
+    document.getElementById('success').style.display = 'block';
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-label').textContent = 'Complete ✦';
+    const pctEl = document.getElementById('progress-pct');
+    if (pctEl) pctEl.textContent = '100%';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ── Init ──
+  document.addEventListener('DOMContentLoaded', () => updateProgress(1));
+</script>
+
+
+<!-- TOAST -->
+<div class="toast" id="gate-toast">Please select Yes or No to continue.</div>
+
+<!-- FIXED BOTTOM PROGRESS BAR -->
+<div class="progress-bar-fixed" id="progress-bar-fixed">
+  <span class="progress-step-label" id="progress-label">Step 1 of 11</span>
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+  <span class="progress-pct" id="progress-pct">0%</span>
+</div>
+
+</body>
+</html>

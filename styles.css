@@ -96,6 +96,10 @@ body {
   box-shadow: 0 24px 50px rgba(17, 17, 17, 0.14);
 }
 
+.content + .content {
+  margin-top: 32px;
+}
+
 .content h2 {
   margin: 0 0 16px;
   font-size: clamp(3rem, 5vw, 4.4rem);
@@ -133,6 +137,28 @@ body {
 .cta-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 18px 30px rgba(215, 0, 16, 0.32);
+}
+
+.content--alert {
+  background: #d70010;
+  border-color: #a1000c;
+}
+
+.content--alert h2,
+.content--alert p,
+.content--alert .note {
+  color: #ffffff;
+}
+
+.content--alert .cta-button {
+  background: #111111;
+  color: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+}
+
+.content--alert .cta-button:hover {
+  box-shadow: 0 20px 34px rgba(0, 0, 0, 0.24);
 }
 
 .footer {
