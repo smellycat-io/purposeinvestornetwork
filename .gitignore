@@ -1,0 +1,4 @@
+node_modules/
+survey.db
+npm-debug.log*
+.DS_Store

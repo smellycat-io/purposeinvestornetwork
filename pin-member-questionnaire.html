@@ -1593,14 +1593,76 @@
   }
 
   // ── Submit ──
-  function handleSubmit() {
-    document.querySelectorAll('.step').forEach(s => s.style.display = 'none');
-    document.getElementById('success').style.display = 'block';
-    document.getElementById('progress-fill').style.width = '100%';
-    document.getElementById('progress-label').textContent = 'Complete ✦';
-    const pctEl = document.getElementById('progress-pct');
-    if (pctEl) pctEl.textContent = '100%';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  async function handleSubmit() {
+    const submitButton = document.querySelector('.btn-submit-final');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Sending…';
+    }
+
+    const answers = collectSurveyAnswers();
+
+    try {
+      const response = await fetch('/api/survey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Server returned an error');
+      }
+
+      document.querySelectorAll('.step').forEach(s => (s.style.display = 'none'));
+      document.getElementById('success').style.display = 'block';
+      document.getElementById('progress-fill').style.width = '100%';
+      document.getElementById('progress-label').textContent = 'Complete ✦';
+      const pctEl = document.getElementById('progress-pct');
+      if (pctEl) pctEl.textContent = '100%';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error(error);
+      alert('There was a problem saving your survey. Please try again.');
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Submit →';
+      }
+    }
+  }
+
+  function collectSurveyAnswers() {
+    const values = {};
+    const fields = Array.from(document.querySelectorAll('.steps-wrap input, .steps-wrap textarea, .steps-wrap select'));
+
+    fields.forEach(field => {
+      if (!field.name) return;
+      if (field.disabled) return;
+
+      if (field.type === 'checkbox') {
+        if (!field.checked) return;
+        values[field.name] = values[field.name] ? `${values[field.name]}, ${field.value}` : field.value;
+        return;
+      }
+
+      if (field.type === 'radio') {
+        if (!field.checked) return;
+        values[field.name] = field.value;
+        return;
+      }
+
+      const value = field.value.trim();
+      if (!value) return;
+      values[field.name] = value;
+    });
+
+    return values;
+  }
+
+  function humanizeFieldName(name) {
+    return name
+      .replace(/[-_]/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase());
   }
 
   // ── Init ──

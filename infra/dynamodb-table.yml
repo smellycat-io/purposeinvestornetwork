@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Purpose Investor Network survey responses DynamoDB table
+Resources:
+  SurveyResponsesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-survey-responses
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+Outputs:
+  TableName:
+    Description: The DynamoDB table name
+    Value: !Ref SurveyResponsesTable
