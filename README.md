@@ -117,6 +117,36 @@ Note: hosting the static files on S3 makes them publicly available; you still ne
 
 If you'd like, I can scaffold a serverless Lambda handler that receives survey POSTs and writes to S3 directly.
 
+## Analytics (PostHog + Plausible)
+
+This project includes lightweight support for client-side analytics and a server-side `/api/track` endpoint that records events to the local SQLite DB and optionally forwards them to PostHog.
+
+Client-side:
+- Plausible: add your `data-domain` in the `<script>` tag included in the HTML files.
+- PostHog: update the `POSTHOG_KEY` in the page snippets or set up `POSTHOG_HOST`/`POSTHOG_API_KEY` for server forwarding.
+
+Server-side forwarding:
+- Set `POSTHOG_API_KEY` (project API key) and optionally `POSTHOG_HOST` (defaults to `https://app.posthog.com`) before starting the server to forward events to PostHog.
+
+Example environment variables:
+
+```bash
+export POSTHOG_API_KEY=phc_...
+export POSTHOG_HOST=https://app.posthog.com
+export SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+export SENTRY_TRACES_SAMPLE_RATE=0.05
+```
+
+Events tracked by default:
+- `cta_click` (when CTAs are clicked)
+- `survey_completed` (when survey is submitted)
+
+You can also post arbitrary events to the server endpoint:
+
+```bash
+curl -X POST http://localhost:3000/api/track -H 'Content-Type: application/json' -d '{"event":"test","properties":{"foo":"bar"}}'
+```
+
 ## Notes
 
 - `survey.db` is in `.gitignore` and will not be uploaded to version control.

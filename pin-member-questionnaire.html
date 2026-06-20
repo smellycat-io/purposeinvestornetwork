@@ -1603,6 +1603,10 @@
     const answers = collectSurveyAnswers();
 
     try {
+      // Track completion client-side
+      try { if (window.posthog && posthog.capture) posthog.capture('survey_completed', { email: answers.email || null }); } catch(e){}
+      fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'survey_completed', properties: { page: 'survey', email: answers.email || null } }) }).catch(()=>{});
+
       const response = await fetch('/api/survey', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

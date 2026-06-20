@@ -1,3 +1,4 @@
+const Sentry = require('@sentry/node');
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
@@ -14,6 +15,8 @@ const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'replace-this-in-prod';
 const AWS_REGION = process.env.AWS_REGION || null;
 const DYNAMODB_TABLE = process.env.AWS_DYNAMODB_TABLE || null;
+const SENTRY_DSN = process.env.SENTRY_DSN || null;
+const SENTRY_TRACES_SAMPLE_RATE = parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.0');
 
 const db = new sqlite3.Database(dbFile, (err) => {
   if (err) {
@@ -30,6 +33,15 @@ if (S3_BUCKET) {
   console.log('S3 upload enabled. Bucket:', S3_BUCKET);
 }
 
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: SENTRY_TRACES_SAMPLE_RATE,
+    environment: process.env.NODE_ENV || 'development'
+  });
+  console.log('Sentry enabled');
+}
+
 let dynamoDbDocClient = null;
 if (DYNAMODB_TABLE) {
   const dynamoClient = new DynamoDBClient({ region: AWS_REGION || undefined });
@@ -44,6 +56,15 @@ db.serialize(() => {
       created_at TEXT NOT NULL,
       email TEXT,
       payload TEXT NOT NULL
+    )
+  `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL,
+      event TEXT NOT NULL,
+      properties TEXT,
+      distinct_id TEXT
     )
   `);
 });
@@ -157,6 +178,7 @@ app.get('/admin', requireAdmin, async (req, res) => {
       </html>
     `);
   } catch (error) {
+    Sentry.captureException(error);
     console.error('Failed to load admin responses:', error);
     res.status(500).send('Unable to load responses.');
   }
@@ -204,6 +226,8 @@ app.post('/api/survey', async (req, res) => {
   const dynamoResult = responses[1].status === 'fulfilled' ? responses[1].value : null;
 
   if (!sqliteResult && !dynamoResult) {
+    const saveError = new Error('Unable to save survey response');
+    Sentry.captureException(saveError);
     return res.status(500).json({ success: false, error: 'Unable to save survey response' });
   }
 
@@ -231,6 +255,40 @@ app.post('/api/survey', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// ── Analytics tracking endpoint ──
+app.post('/api/track', async (req, res) => {
+  const { event, properties, distinct_id } = req.body || {};
+  if (!event) return res.status(400).json({ success: false, error: 'Missing event' });
+  const createdAt = new Date().toISOString();
+  const props = properties ? JSON.stringify(properties) : null;
+
+  // Save to SQLite
+  db.run('INSERT INTO analytics_events (created_at, event, properties, distinct_id) VALUES (?, ?, ?, ?)', [createdAt, event, props, distinct_id || null], function(err) {
+    if (err) console.error('Failed to save analytics event to SQLite:', err);
+  });
+
+  // Optionally forward to PostHog if configured
+  const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || null;
+  const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://app.posthog.com';
+  if (POSTHOG_API_KEY) {
+    try {
+      await fetch(`${POSTHOG_HOST}/capture/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: POSTHOG_API_KEY, event, properties: properties || {}, distinct_id: distinct_id || null })
+      });
+    } catch (err) {
+      console.error('Failed to forward event to PostHog:', err);
+    }
+  }
+
+  return res.json({ success: true });
+});
+
+if (SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 if (require.main === module) {
   app.listen(PORT, () => {

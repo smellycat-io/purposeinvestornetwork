@@ -27,6 +27,33 @@
       <a class="cta-button" href="pin-member-questionnaire.html">Take Our Survey</a>
     </main>
 
+    <!-- Analytics: Plausible + PostHog (replace keys/domains below) -->
+    <script async defer data-domain="yourdomain.com" src="https://plausible.io/js/plausible.js"></script>
+    <script>
+      (function() {
+        // PostHog client init - set POSTHOG_KEY and POSTHOG_HOST in production
+        try {
+          window.posthog && posthog.init && posthog.init('POSTHOG_KEY', { api_host: 'https://app.posthog.com' });
+        } catch (e) {}
+
+        document.addEventListener('click', function (e) {
+          const el = e.target.closest && e.target.closest('.cta-button');
+          if (!el) return;
+          const text = el.textContent.trim();
+          // send to PostHog if available
+          if (window.posthog && posthog.capture) {
+            posthog.capture('cta_click', { text });
+          }
+          // send to server analytics endpoint
+          fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'cta_click', properties: { text, page: 'index' } })
+          }).catch(() => {});
+        });
+      })();
+    </script>
+
     <main class="content content--alert">
       <h2>Stay Informed</h2>
       <p>The Purpose Investor Network is reforming, this time with a new mission: Mentoring the Next Generation.</p>
