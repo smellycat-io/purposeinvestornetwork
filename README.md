@@ -124,9 +124,15 @@ This project includes lightweight support for client-side analytics and a server
 Client-side:
 - Plausible: add your `data-domain` in the `<script>` tag included in the HTML files.
 - PostHog: update the `POSTHOG_KEY` in the page snippets or set up `POSTHOG_HOST`/`POSTHOG_API_KEY` for server forwarding.
+- Sentry Browser: set `SENTRY_BROWSER_DSN` for frontend error and performance monitoring.
 
 Server-side forwarding:
 - Set `POSTHOG_API_KEY` (project API key) and optionally `POSTHOG_HOST` (defaults to `https://app.posthog.com`) before starting the server to forward events to PostHog.
+
+Recommended Sentry setup:
+- Create a Node.js project in Sentry for backend errors and tracing.
+- Create a JavaScript (Browser) project in Sentry for frontend errors and performance.
+- You can also use one project for both, but separate projects make backend vs browser issues easier to separate.
 
 Example environment variables:
 
@@ -134,7 +140,11 @@ Example environment variables:
 export POSTHOG_API_KEY=phc_...
 export POSTHOG_HOST=https://app.posthog.com
 export SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+export SENTRY_BROWSER_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
 export SENTRY_TRACES_SAMPLE_RATE=0.05
+export SENTRY_BROWSER_TRACES_SAMPLE_RATE=0.05
+export SENTRY_RELEASE=purpose-investor-network@1.0.0
+export SENTRY_ENVIRONMENT=production
 ```
 
 Events tracked by default:

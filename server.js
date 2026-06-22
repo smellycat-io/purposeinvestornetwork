@@ -1,7 +1,11 @@
-const Sentry = require('@sentry/node');
+// IMPORTANT: Initialize Sentry before anything else
+require('./instrument.js');
+
+const { captureException, flush, setupExpressErrorHandler } = require('@sentry/node');
 const express = require('express');
+const { json, urlencoded, static: expressStatic } = express;
 const session = require('express-session');
-const path = require('path');
+const { join } = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -9,14 +13,16 @@ const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require('@aws-sdk/li
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const dbFile = process.env.DB_FILE || path.join(__dirname, 'survey.db');
+const dbFile = process.env.DB_FILE || join(__dirname, 'survey.db');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'replace-this-in-prod';
 const AWS_REGION = process.env.AWS_REGION || null;
 const DYNAMODB_TABLE = process.env.AWS_DYNAMODB_TABLE || null;
-const SENTRY_DSN = process.env.SENTRY_DSN || null;
-const SENTRY_TRACES_SAMPLE_RATE = parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.0');
+const SENTRY_BROWSER_DSN = process.env.SENTRY_BROWSER_DSN || null;
+const SENTRY_ENVIRONMENT = process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'production';
+const SENTRY_RELEASE = process.env.SENTRY_RELEASE || 'purpose-investor-network@latest';
+const SENTRY_BROWSER_TRACES_SAMPLE_RATE = parseFloat(process.env.SENTRY_BROWSER_TRACES_SAMPLE_RATE || process.env.SENTRY_TRACES_SAMPLE_RATE || '0.0');
 
 const db = new sqlite3.Database(dbFile, (err) => {
   if (err) {
@@ -31,15 +37,6 @@ const S3_BUCKET = process.env.AWS_S3_BUCKET || null;
 if (S3_BUCKET) {
   s3Client = new S3Client({});
   console.log('S3 upload enabled. Bucket:', S3_BUCKET);
-}
-
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    tracesSampleRate: SENTRY_TRACES_SAMPLE_RATE,
-    environment: process.env.NODE_ENV || 'development'
-  });
-  console.log('Sentry enabled');
 }
 
 let dynamoDbDocClient = null;
@@ -69,8 +66,8 @@ db.serialize(() => {
   `);
 });
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(json({ limit: '2mb' }));
+app.use(urlencoded({ extended: true }));
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
@@ -119,6 +116,31 @@ app.post('/login', (req, res) => {
 
 app.get('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login'));
+});
+
+app.get('/sentry-test', async (req, res) => {
+  try {
+    foo();
+  } catch (e) {
+    captureException(e);
+    try {
+      await flush(2000);
+    } catch (flushErr) {
+      console.error('Sentry flush failed:', flushErr);
+    }
+    res.send('Test error sent to Sentry');
+  }
+});
+
+app.get('/env.js', (req, res) => {
+  res.type('application/javascript');
+  res.set('Cache-Control', 'no-store');
+  res.send(`window.ENV = {
+    SENTRY_BROWSER_DSN: ${JSON.stringify(SENTRY_BROWSER_DSN)},
+    SENTRY_ENVIRONMENT: ${JSON.stringify(SENTRY_ENVIRONMENT)},
+    SENTRY_RELEASE: ${JSON.stringify(SENTRY_RELEASE)},
+    SENTRY_BROWSER_TRACES_SAMPLE_RATE: ${SENTRY_BROWSER_TRACES_SAMPLE_RATE}
+  };`);
 });
 
 async function listResponses() {
@@ -178,13 +200,13 @@ app.get('/admin', requireAdmin, async (req, res) => {
       </html>
     `);
   } catch (error) {
-    Sentry.captureException(error);
+    captureException(error);
     console.error('Failed to load admin responses:', error);
     res.status(500).send('Unable to load responses.');
   }
 });
 
-app.use(express.static(path.join(__dirname)));
+app.use(expressStatic(join(__dirname)));
 
 app.post('/api/survey', async (req, res) => {
   const answers = req.body.answers || {};
@@ -227,7 +249,7 @@ app.post('/api/survey', async (req, res) => {
 
   if (!sqliteResult && !dynamoResult) {
     const saveError = new Error('Unable to save survey response');
-    Sentry.captureException(saveError);
+    captureException(saveError);
     return res.status(500).json({ success: false, error: 'Unable to save survey response' });
   }
 
@@ -286,9 +308,7 @@ app.post('/api/track', async (req, res) => {
   return res.json({ success: true });
 });
 
-if (SENTRY_DSN) {
-  Sentry.setupExpressErrorHandler(app);
-}
+setupExpressErrorHandler(app);
 
 if (require.main === module) {
   app.listen(PORT, () => {
