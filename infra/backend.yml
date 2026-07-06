@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Purpose Investor Network backend Lambda + HTTP API deployment
+
+Parameters:
+  DeploymentBucket:
+    Type: String
+    Description: S3 bucket containing the Lambda deployment package
+  DeploymentKey:
+    Type: String
+    Description: S3 object key for the Lambda zip (e.g. dist/backend.zip)
+  DDBTableName:
+    Type: String
+    Description: DynamoDB table name for survey responses
+  Environment:
+    Type: String
+    Default: production
+    Description: Deployment environment
+  SentryDsn:
+    Type: String
+    Default: ''
+    Description: Sentry DSN for backend error reporting
+  S3UploadsBucket:
+    Type: String
+    Default: ''
+    Description: Optional bucket for S3 response uploads
+  AdminUser:
+    Type: String
+    Default: admin
+    Description: Admin username for the backend login
+  AdminPassword:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Admin password for the backend login
+  SessionSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Session secret for Express sessions
+
+Conditions:
+  HasS3UploadsBucket: !Not [!Equals [!Ref S3UploadsBucket, '']]
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DDBTableName}
+        - PolicyName: OptionalS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !If
+                  - HasS3UploadsBucket
+                  - - !Sub arn:aws:s3:::${S3UploadsBucket}
+                    - !Sub arn:aws:s3:::${S3UploadsBucket}/*
+                  - !Ref 'AWS::NoValue'
+
+  BackendFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub purpose-investor-network-backend-${AWS::StackName}
+      Runtime: nodejs18.x
+      Handler: lambda.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: !Ref DeploymentKey
+      Timeout: 20
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref DDBTableName
+          AWS_REGION: !Ref 'AWS::Region'
+          SENTRY_DSN: !Ref SentryDsn
+          SENTRY_RELEASE: !Sub purpose-investor-network@${Environment}
+          S3_BUCKET: !Ref S3UploadsBucket
+          SENTRY_ENVIRONMENT: !Ref Environment
+          ADMIN_USER: !Ref AdminUser
+          ADMIN_PASS: !Ref AdminPassword
+          SESSION_SECRET: !Ref SessionSecret
+
+  BackendApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub purpose-investor-network-api-${AWS::StackName}
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - '*'
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref BackendApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BackendFunction.Arn}/invocations
+      PayloadFormatVersion: '2.0'
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref BackendApi
+      RouteKey: '$default'
+      Target: !Sub integrations/${ApiIntegration}
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref BackendApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BackendFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BackendApi}/*
+
+Outputs:
+  ApiEndpoint:
+    Description: HTTP API endpoint for backend
+    Value: !Sub https://${BackendApi}.execute-api.${AWS::Region}.amazonaws.com
+  FunctionArn:
+    Value: !GetAtt BackendFunction.Arn

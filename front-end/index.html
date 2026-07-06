@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Purpose Investor Network | Stay Informed</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+<body>
+  <div class="page-shell">
+    <header class="brand">
+      <div class="logo">
+        <img src="logo.png" alt="Purpose Investor Network logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+        <div class="logo-fallback">PIN</div>
+      </div>
+      <div class="brand-text">
+        <h1>Purpose Investor Network</h1>
+        <p class="subheading">Mentoring the Next Generation</p>
+        <p>Mentoring the Next Generation with Philanthropic Purpose</p>
+      </div>
+    </header>
+
+    <main class="content">
+      <h2>Help Us Build The Future</h2>
+      <p>The Purpose Investor Network is reforming, this time with a new mission: Mentoring the Next Generation.</p>
+      <p class="note">We would love your input and experiences as we design our new online format, early access opportunities will be available for those who participate.</p>
+      <a class="cta-button" href="pin-member-questionnaire.html">Take Our Survey</a>
+    </main>
+
+    <main class="content content--alert">
+      <h2>Stay Informed</h2>
+      <p>The Purpose Investor Network is reforming, this time with a new mission: Mentoring the Next Generation.</p>
+      <p class="note">Get more info and stay informed on our progress, launch timing, and early access opportunities.</p>
+      <a class="cta-button" href="mailto:elise@purposeinvestornetwork.com">Stay Informed</a>
+    </main>
+
+    <!-- Sentry browser + analytics -->
+    <script src="/env.js"></script>
+    <script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+    <script>
+      if (window.ENV && window.ENV.SENTRY_BROWSER_DSN) {
+        Sentry.init({
+          dsn: window.ENV.SENTRY_BROWSER_DSN,
+          environment: window.ENV.SENTRY_ENVIRONMENT,
+          release: window.ENV.SENTRY_RELEASE,
+          integrations: [new Sentry.BrowserTracing()],
+          tracesSampleRate: window.ENV.SENTRY_TRACES_SAMPLE_RATE || 0
+        });
+        Sentry.setTag('page', 'index');
+      }
+    </script>
+    <script async defer data-domain="yourdomain.com" src="https://plausible.io/js/plausible.js"></script>
+    <script>
+      (function() {
+        // PostHog client init - set POSTHOG_KEY and POSTHOG_HOST in production
+        try {
+          window.posthog && posthog.init && posthog.init('POSTHOG_KEY', { api_host: 'https://app.posthog.com' });
+        } catch (e) {}
+
+        document.addEventListener('click', function (e) {
+          const el = e.target.closest && e.target.closest('.cta-button');
+          if (!el) return;
+          const text = el.textContent.trim();
+          // send to PostHog if available
+          if (window.posthog && posthog.capture) {
+            posthog.capture('cta_click', { text });
+          }
+          // send to server analytics endpoint
+          fetch('/api/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'cta_click', properties: { text, page: 'index' } })
+          }).catch(() => {});
+        });
+      })();
+    </script>
+    
+    <footer class="footer">Purpose Investor Network • Empowering purpose-driven investment journeys</footer>
+  </div>

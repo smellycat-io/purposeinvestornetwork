@@ -1,0 +1,136 @@
+name: Production Deployment
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy frontend to public S3
+        uses: jakejarvis/s3-sync-action@v0.5.1
+        with:
+          args: --delete --exclude ".env" --exclude ".env.*"
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-2
+          SOURCE_DIR: ./front-end
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Validate deployment secrets
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEPLOYMENT_BUCKET: ${{ secrets.AWS_DEPLOYMENT_BUCKET }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEPLOYMENT_BUCKET AWS_S3_BUCKET)
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required GitHub secret: $var"
+              exit 1
+            fi
+          done
+          echo "All required deployment secrets are present."
+
+      - name: Download private env file from deployment bucket
+        run: |
+          if aws s3 cp s3://${{ secrets.AWS_DEPLOYMENT_BUCKET }}/private/.env .env; then
+            echo "Loaded private env file from deployment bucket."
+          else
+            echo "No private env file found in deployment bucket; continuing without it."
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install & Package Backend
+        run: |
+          cd backend
+          npm install --production
+          if [ -f ../.env ]; then
+            cp ../.env .env
+          fi
+          zip -r ../backend.zip .
+          cd ..
+
+      - name: Apply environment variables to Lambda
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+
+          function_name = 'purpose-investor-network-backend-pin-backend'
+
+          with open('.env', 'r', encoding='utf-8') as handle:
+              env_values = {}
+              for raw_line in handle.read().splitlines():
+                  line = raw_line.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  key, value = line.split('=', 1)
+                  env_values[key.strip()] = value.strip()
+
+          current_output = subprocess.check_output([
+              'aws', 'lambda', 'get-function-configuration',
+              '--function-name', function_name,
+              '--query', 'Environment.Variables',
+              '--output', 'json'
+          ], text=True)
+          current = json.loads(current_output) if current_output.strip() else {}
+
+          current.update({
+              'ADMIN_USER': env_values.get('ADMIN_USER', current.get('ADMIN_USER', 'admin')),
+              'ADMIN_PASS': env_values.get('ADMIN_PASS', current.get('ADMIN_PASS', 'password')),
+              'SESSION_SECRET': env_values.get('SESSION_SECRET', current.get('SESSION_SECRET', '')),
+              'AWS_REGION': env_values.get('AWS_REGION', current.get('AWS_REGION', 'us-east-2')),
+              'SENTRY_DSN': env_values.get('SENTRY_DSN', current.get('SENTRY_DSN', '')),
+              'SENTRY_ENVIRONMENT': env_values.get('SENTRY_ENVIRONMENT', current.get('SENTRY_ENVIRONMENT', 'production')),
+              'SENTRY_RELEASE': env_values.get('SENTRY_RELEASE', current.get('SENTRY_RELEASE', 'purpose-investor-network@latest')),
+              'SENTRY_TRACES_SAMPLE_RATE': env_values.get('SENTRY_TRACES_SAMPLE_RATE', current.get('SENTRY_TRACES_SAMPLE_RATE', '0.0')),
+              'S3_BUCKET': env_values.get('AWS_S3_BUCKET', current.get('S3_BUCKET', '')),
+          })
+
+          subprocess.check_call([
+              'aws', 'lambda', 'update-function-configuration',
+              '--function-name', function_name,
+              '--environment', json.dumps({'Variables': current})
+          ])
+          PY
+
+      - name: Upload private env file to deployment bucket
+        run: |
+          if [ -f .env ]; then
+            aws s3 cp .env s3://${{ secrets.AWS_DEPLOYMENT_BUCKET }}/private/.env --acl private
+          else
+            echo "No local .env file available to upload."
+          fi
+
+      - name: Upload Zip to Deployment S3 Bucket
+        run: |
+          aws s3 cp backend.zip s3://${{ secrets.AWS_DEPLOYMENT_BUCKET }}/dist/backend.zip
+
+      - name: Update Lambda Function Code
+        run: |
+          aws lambda update-function-code \
+            --function-name purpose-investor-network-backend-pin-backend \
+            --s3-bucket ${{ secrets.AWS_DEPLOYMENT_BUCKET }} \
+            --s3-key dist/backend.zip
