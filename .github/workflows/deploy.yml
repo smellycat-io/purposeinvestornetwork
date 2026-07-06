@@ -109,13 +109,17 @@ jobs:
               if value:
                   env_values[key] = value
 
-          current_output = subprocess.check_output([
-              'aws', 'lambda', 'get-function-configuration',
-              '--function-name', function_name,
-              '--query', 'Environment.Variables',
-              '--output', 'json'
-          ], text=True)
-          current = json.loads(current_output) if current_output.strip() else {}
+          try:
+              current_output = subprocess.check_output([
+                  'aws', 'lambda', 'get-function-configuration',
+                  '--function-name', function_name,
+                  '--query', 'Environment.Variables',
+                  '--output', 'json'
+              ], text=True)
+              current = json.loads(current_output) if current_output.strip() else {}
+          except subprocess.CalledProcessError as exc:
+              print(f'Lambda function not found yet; continuing with empty environment config: {exc}')
+              current = {}
 
           current.update({
               'ADMIN_USER': env_values.get('ADMIN_USER', current.get('ADMIN_USER', 'admin')),
@@ -147,6 +151,90 @@ jobs:
       - name: Upload Zip to BACKEND S3 Bucket
         run: |
           aws s3 cp backend.zip s3://${{ secrets.AWS_BACKEND_BUCKET }}/dist/backend.zip
+
+      - name: Create Lambda if missing
+        env:
+          ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
+          SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          function_name = 'purpose-investor-network-backend-pin-backend'
+          role_name = 'purpose-investor-network-backend-role'
+          bucket_name = os.environ['AWS_BACKEND_BUCKET']
+
+          env_vars = {
+              'ADMIN_USER': os.getenv('ADMIN_USER', 'admin'),
+              'ADMIN_PASS': os.getenv('ADMIN_PASS', 'password'),
+              'SESSION_SECRET': os.getenv('SESSION_SECRET', ''),
+              'AWS_REGION': 'us-east-2',
+              'SENTRY_DSN': os.getenv('SENTRY_DSN', ''),
+              'SENTRY_ENVIRONMENT': os.getenv('SENTRY_ENVIRONMENT', 'production'),
+              'SENTRY_RELEASE': os.getenv('SENTRY_RELEASE', 'purpose-investor-network@latest'),
+              'SENTRY_TRACES_SAMPLE_RATE': os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.0'),
+              'S3_BUCKET': os.getenv('AWS_S3_BUCKET', ''),
+          }
+
+          try:
+              subprocess.check_output([
+                  'aws', 'lambda', 'get-function',
+                  '--function-name', function_name,
+                  '--query', 'Configuration.FunctionName',
+                  '--output', 'text'
+              ], text=True)
+              print('Lambda already exists; skipping creation.')
+          except subprocess.CalledProcessError:
+              print('Creating Lambda function for first deployment...')
+
+              try:
+                  subprocess.check_output(['aws', 'iam', 'get-role', '--role-name', role_name], text=True)
+              except subprocess.CalledProcessError:
+                  subprocess.check_call([
+                      'aws', 'iam', 'create-role',
+                      '--role-name', role_name,
+                      '--assume-role-policy-document', json.dumps({
+                          'Version': '2012-10-17',
+                          'Statement': [{
+                              'Effect': 'Allow',
+                              'Principal': {'Service': 'lambda.amazonaws.com'},
+                              'Action': 'sts:AssumeRole'
+                          }]
+                      })
+                  ])
+
+              subprocess.check_call([
+                  'aws', 'iam', 'attach-role-policy',
+                  '--role-name', role_name,
+                  '--policy-arn', 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+              ], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+              role_arn = subprocess.check_output([
+                  'aws', 'iam', 'get-role', '--role-name', role_name, '--query', 'Role.Arn', '--output', 'text'
+              ], text=True).strip()
+
+              subprocess.check_call([
+                  'aws', 'lambda', 'create-function',
+                  '--function-name', function_name,
+                  '--runtime', 'nodejs18.x',
+                  '--role', role_arn,
+                  '--handler', 'lambda.handler',
+                  '--code', f'S3Bucket={bucket_name},S3Key=dist/backend.zip',
+                  '--timeout', '20',
+                  '--memory-size', '512',
+                  '--environment', json.dumps({'Variables': env_vars})
+              ])
+              print('Lambda created successfully.')
+          PY
 
       - name: Update Lambda Function Code
         run: |
