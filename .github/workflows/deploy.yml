@@ -133,11 +133,15 @@ jobs:
               'S3_BUCKET': env_values.get('AWS_S3_BUCKET', current.get('S3_BUCKET', '')),
           })
 
-          subprocess.check_call([
-              'aws', 'lambda', 'update-function-configuration',
-              '--function-name', function_name,
-              '--environment', json.dumps({'Variables': current})
-          ])
+          try:
+              subprocess.check_call([
+                  'aws', 'lambda', 'update-function-configuration',
+                  '--function-name', function_name,
+                  '--environment', json.dumps({'Variables': current})
+              ])
+              print('Updated Lambda environment variables.')
+          except subprocess.CalledProcessError as exc:
+              print(f'Skipping Lambda environment update because the function is not available yet: {exc}')
           PY
 
       - name: Upload private env file to BACKEND bucket
