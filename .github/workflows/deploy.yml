@@ -33,28 +33,28 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-2
 
-      - name: Validate deployment secrets
+      - name: Validate BACKEND secrets
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEPLOYMENT_BUCKET: ${{ secrets.AWS_DEPLOYMENT_BUCKET }}
+          AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
         run: |
-          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEPLOYMENT_BUCKET AWS_S3_BUCKET)
+          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BACKEND_BUCKET AWS_S3_BUCKET)
           for var in "${required_vars[@]}"; do
             if [ -z "${!var}" ]; then
               echo "Missing required GitHub secret: $var"
               exit 1
             fi
           done
-          echo "All required deployment secrets are present."
+          echo "All required BACKEND secrets are present."
 
-      - name: Download private env file from deployment bucket
+      - name: Download private env file from BACKEND bucket
         run: |
-          if aws s3 cp s3://${{ secrets.AWS_DEPLOYMENT_BUCKET }}/private/.env .env; then
-            echo "Loaded private env file from deployment bucket."
+          if aws s3 cp s3://${{ secrets.AWS_BACKEND_BUCKET }}/private/.env .env; then
+            echo "Loaded private env file from BACKEND bucket."
           else
-            echo "No private env file found in deployment bucket; continuing without it."
+            echo "No private env file found in BACKEND bucket; continuing without it."
           fi
 
       - name: Set up Node.js
@@ -116,21 +116,21 @@ jobs:
           ])
           PY
 
-      - name: Upload private env file to deployment bucket
+      - name: Upload private env file to BACKEND bucket
         run: |
           if [ -f .env ]; then
-            aws s3 cp .env s3://${{ secrets.AWS_DEPLOYMENT_BUCKET }}/private/.env --acl private
+            aws s3 cp .env s3://${{ secrets.AWS_BACKEND_BUCKET }}/private/.env --acl private
           else
             echo "No local .env file available to upload."
           fi
 
-      - name: Upload Zip to Deployment S3 Bucket
+      - name: Upload Zip to BACKEND S3 Bucket
         run: |
-          aws s3 cp backend.zip s3://${{ secrets.AWS_DEPLOYMENT_BUCKET }}/dist/backend.zip
+          aws s3 cp backend.zip s3://${{ secrets.AWS_BACKEND_BUCKET }}/dist/backend.zip
 
       - name: Update Lambda Function Code
         run: |
           aws lambda update-function-code \
             --function-name purpose-investor-network-backend-pin-backend \
-            --s3-bucket ${{ secrets.AWS_DEPLOYMENT_BUCKET }} \
+            --s3-bucket ${{ secrets.AWS_BACKEND_BUCKET }} \
             --s3-key dist/backend.zip
