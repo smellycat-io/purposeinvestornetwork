@@ -246,6 +246,8 @@ jobs:
           PY
 
       - name: Update Lambda Function Code
+        env:
+          AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
         run: |
           python - <<'PY'
           import os
