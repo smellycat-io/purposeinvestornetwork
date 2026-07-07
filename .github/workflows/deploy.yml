@@ -92,6 +92,11 @@ jobs:
           function_name = 'purpose-investor-network-backend-pin-backend'
           env_path = Path('.env')
           env_values = {}
+          reserved_keys = {
+              'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+              'AWS_DEFAULT_REGION', 'AWS_REGION', 'AWS_PROFILE', 'AWS_SHARED_CREDENTIALS_FILE',
+              'AWS_LAMBDA_FUNCTION_NAME', 'AWS_EXECUTION_ENV', 'AWS_PATH', 'PATH'
+          }
 
           if env_path.exists():
               with env_path.open('r', encoding='utf-8') as handle:
@@ -100,7 +105,9 @@ jobs:
                       if not line or line.startswith('#') or '=' not in line:
                           continue
                       key, value = line.split('=', 1)
-                      env_values[key.strip()] = value.strip()
+                      key = key.strip()
+                      if key not in reserved_keys:
+                          env_values[key] = value.strip()
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
@@ -125,12 +132,11 @@ jobs:
               'ADMIN_USER': env_values.get('ADMIN_USER', current.get('ADMIN_USER', 'admin')),
               'ADMIN_PASS': env_values.get('ADMIN_PASS', current.get('ADMIN_PASS', 'password')),
               'SESSION_SECRET': env_values.get('SESSION_SECRET', current.get('SESSION_SECRET', '')),
-              'AWS_REGION': env_values.get('AWS_REGION', current.get('AWS_REGION', 'us-east-2')),
               'SENTRY_DSN': env_values.get('SENTRY_DSN', current.get('SENTRY_DSN', '')),
               'SENTRY_ENVIRONMENT': env_values.get('SENTRY_ENVIRONMENT', current.get('SENTRY_ENVIRONMENT', 'production')),
               'SENTRY_RELEASE': env_values.get('SENTRY_RELEASE', current.get('SENTRY_RELEASE', 'purpose-investor-network@latest')),
               'SENTRY_TRACES_SAMPLE_RATE': env_values.get('SENTRY_TRACES_SAMPLE_RATE', current.get('SENTRY_TRACES_SAMPLE_RATE', '0.0')),
-              'S3_BUCKET': env_values.get('AWS_S3_BUCKET', current.get('S3_BUCKET', '')),
+              'AWS_S3_BUCKET': env_values.get('AWS_S3_BUCKET', current.get('AWS_S3_BUCKET', '')),
           })
 
           try:
@@ -181,12 +187,11 @@ jobs:
               'ADMIN_USER': os.getenv('ADMIN_USER', 'admin'),
               'ADMIN_PASS': os.getenv('ADMIN_PASS', 'password'),
               'SESSION_SECRET': os.getenv('SESSION_SECRET', ''),
-              'AWS_REGION': 'us-east-2',
               'SENTRY_DSN': os.getenv('SENTRY_DSN', ''),
               'SENTRY_ENVIRONMENT': os.getenv('SENTRY_ENVIRONMENT', 'production'),
               'SENTRY_RELEASE': os.getenv('SENTRY_RELEASE', 'purpose-investor-network@latest'),
               'SENTRY_TRACES_SAMPLE_RATE': os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.0'),
-              'S3_BUCKET': os.getenv('AWS_S3_BUCKET', ''),
+              'AWS_S3_BUCKET': os.getenv('AWS_S3_BUCKET', ''),
           }
 
           try:
