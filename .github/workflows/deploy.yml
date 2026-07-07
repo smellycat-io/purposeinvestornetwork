@@ -81,6 +81,7 @@ jobs:
           SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
         run: |
           python - <<'PY'
           import json
