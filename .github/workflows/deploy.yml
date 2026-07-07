@@ -246,7 +246,40 @@ jobs:
 
       - name: Update Lambda Function Code
         run: |
-          aws lambda update-function-code \
-            --function-name purpose-investor-network-backend-pin-backend \
-            --s3-bucket ${{ secrets.AWS_BACKEND_BUCKET }} \
-            --s3-key dist/backend.zip
+          python - <<'PY'
+          import os
+          import subprocess
+          import time
+
+          function_name = 'purpose-investor-network-backend-pin-backend'
+          for attempt in range(1, 13):
+              try:
+                  subprocess.check_call([
+                      'aws', 'lambda', 'get-function',
+                      '--function-name', function_name,
+                      '--query', 'Configuration.State',
+                      '--output', 'text'
+                  ])
+                  state = subprocess.check_output([
+                      'aws', 'lambda', 'get-function',
+                      '--function-name', function_name,
+                      '--query', 'Configuration.State',
+                      '--output', 'text'
+                  ], text=True).strip()
+                  print(f'Lambda state: {state}')
+                  if state == 'Active':
+                      subprocess.check_call([
+                          'aws', 'lambda', 'update-function-code',
+                          '--function-name', function_name,
+                          '--s3-bucket', os.environ['AWS_BACKEND_BUCKET'],
+                          '--s3-key', 'dist/backend.zip'
+                      ])
+                      print('Lambda code updated successfully.')
+                      break
+                  time.sleep(10)
+              except subprocess.CalledProcessError as exc:
+                  print(f'Waiting for Lambda to become active (attempt {attempt}/12): {exc}')
+                  time.sleep(10)
+          else:
+              raise SystemExit('Lambda did not become active in time for code update.')
+          PY
