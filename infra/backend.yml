@@ -23,6 +23,22 @@ Parameters:
     Type: String
     Default: ''
     Description: Optional bucket for S3 response uploads
+  FrontendBucket:
+    Type: String
+    Default: ''
+    Description: S3 bucket name that contains the static front-end website
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: Optional ACM certificate ARN (must be in us-east-1 for CloudFront)
+  SiteDomain:
+    Type: String
+    Default: ''
+    Description: Optional custom domain for the site (e.g. purposeinvestornetwork.org)
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route53 Hosted Zone ID for the custom domain
   AdminUser:
     Type: String
     Default: admin
@@ -39,6 +55,8 @@ Parameters:
     Description: Session secret for Express sessions
 
 Conditions:
+  UseAcmCert: !Not [!Equals [!Ref CertificateArn, '']]
+  UseSiteDomain: !Not [!Equals [!Ref SiteDomain, '']]
   HasS3UploadsBucket: !Not [!Equals [!Ref S3UploadsBucket, '']]
 
 Resources:
@@ -95,11 +113,10 @@ Resources:
       Timeout: 20
       Environment:
         Variables:
-          DYNAMODB_TABLE: !Ref DDBTableName
-          AWS_REGION: !Ref 'AWS::Region'
+          AWS_DYNAMODB_TABLE: !Ref DDBTableName
           SENTRY_DSN: !Ref SentryDsn
           SENTRY_RELEASE: !Sub purpose-investor-network@${Environment}
-          S3_BUCKET: !Ref S3UploadsBucket
+          AWS_S3_BUCKET: !Ref S3UploadsBucket
           SENTRY_ENVIRONMENT: !Ref Environment
           ADMIN_USER: !Ref AdminUser
           ADMIN_PASS: !Ref AdminPassword
@@ -153,6 +170,6 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: HTTP API endpoint for backend
-    Value: !Sub https://${BackendApi}.execute-api.${AWS::Region}.amazonaws.com
+    Value: !GetAtt BackendApi.ApiEndpoint
   FunctionArn:
     Value: !GetAtt BackendFunction.Arn

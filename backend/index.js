@@ -6,14 +6,14 @@ const express = require('express');
 const { json, urlencoded, static: expressStatic } = express;
 const session = require('express-session');
 const { join } = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const dbFile = process.env.DB_FILE || join(__dirname, 'survey.db');
+const dbFile = process.env.DB_FILE || (process.env.LAMBDA_TASK_ROOT ? join('/tmp', 'survey-store.json') : join(__dirname, 'survey.db'));
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'replace-this-in-prod';
@@ -24,12 +24,57 @@ const SENTRY_ENVIRONMENT = process.env.SENTRY_ENVIRONMENT || process.env.NODE_EN
 const SENTRY_RELEASE = process.env.SENTRY_RELEASE || 'purpose-investor-network@latest';
 const SENTRY_BROWSER_TRACES_SAMPLE_RATE = parseFloat(process.env.SENTRY_BROWSER_TRACES_SAMPLE_RATE || process.env.SENTRY_TRACES_SAMPLE_RATE || '0.0');
 
-const db = new sqlite3.Database(dbFile, (err) => {
-  if (err) {
-    console.error('Unable to open database:', err);
-    process.exit(1);
+function loadStore() {
+  if (dbFile === ':memory:') {
+    return { surveyResponses: [], analyticsEvents: [] };
   }
-});
+
+  const storePath = dbFile;
+  const storeDir = join(storePath, '..');
+  if (!fs.existsSync(storeDir)) {
+    fs.mkdirSync(storeDir, { recursive: true });
+  }
+
+  if (!fs.existsSync(storePath)) {
+    const initialStore = { surveyResponses: [], analyticsEvents: [] };
+    fs.writeFileSync(storePath, JSON.stringify(initialStore, null, 2));
+    return initialStore;
+  }
+
+  try {
+    const contents = fs.readFileSync(storePath, 'utf8');
+    return JSON.parse(contents);
+  } catch (err) {
+    console.error('Unable to read store file:', err);
+    return { surveyResponses: [], analyticsEvents: [] };
+  }
+}
+
+const store = loadStore();
+
+function persistStore() {
+  if (dbFile === ':memory:') {
+    return;
+  }
+
+  fs.writeFileSync(dbFile, JSON.stringify(store, null, 2));
+}
+
+function createStoreId() {
+  return Date.now() + Math.floor(Math.random() * 1000000);
+}
+
+function saveSurveyResponseToStore(createdAt, email, payload) {
+  const id = createStoreId();
+  store.surveyResponses.push({ id, created_at: createdAt, email, payload });
+  persistStore();
+  return id;
+}
+
+function saveAnalyticsEventToStore(createdAt, event, properties, distinctId) {
+  store.analyticsEvents.push({ created_at: createdAt, event, properties, distinct_id: distinctId });
+  persistStore();
+}
 
 // Optional S3 client (if AWS_S3_BUCKET is provided)
 let s3Client = null;
@@ -45,26 +90,6 @@ if (DYNAMODB_TABLE) {
   dynamoDbDocClient = DynamoDBDocumentClient.from(dynamoClient);
   console.log('DynamoDB enabled. Table:', DYNAMODB_TABLE);
 }
-
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS survey_responses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      created_at TEXT NOT NULL,
-      email TEXT,
-      payload TEXT NOT NULL
-    )
-  `);
-  db.run(`
-    CREATE TABLE IF NOT EXISTS analytics_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      created_at TEXT NOT NULL,
-      event TEXT NOT NULL,
-      properties TEXT,
-      distinct_id TEXT
-    )
-  `);
-});
 
 app.use(json({ limit: '2mb' }));
 app.use(urlencoded({ extended: true }));
@@ -154,17 +179,16 @@ async function listResponses() {
     }));
   }
 
-  return new Promise((resolve, reject) => {
-    db.all('SELECT id, created_at, email, payload FROM survey_responses ORDER BY id DESC LIMIT 200', (err, rows) => {
-      if (err) return reject(err);
-      return resolve(rows.map(row => ({
-        id: row.id,
-        createdAt: row.created_at,
-        email: row.email,
-        answers: JSON.parse(row.payload || '{}')
-      })));
-    });
-  });
+  return store.surveyResponses
+    .slice()
+    .sort((a, b) => b.id - a.id)
+    .slice(0, 200)
+    .map(row => ({
+      id: row.id,
+      createdAt: row.created_at,
+      email: row.email,
+      answers: JSON.parse(row.payload || '{}')
+    }));
 }
 
 app.get('/admin', requireAdmin, async (req, res) => {
@@ -215,21 +239,7 @@ app.post('/api/survey', async (req, res) => {
   const createdAt = new Date().toISOString();
   const recordId = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
-  const saveToSqlite = () => new Promise(resolve => {
-    db.run(
-      'INSERT INTO survey_responses (created_at, email, payload) VALUES (?, ?, ?)',
-      [createdAt, email, payload],
-      function (err) {
-        if (err) {
-          console.error('Failed to save survey response to SQLite:', err);
-          return resolve(null);
-        }
-        return resolve(this.lastID);
-      }
-    );
-  });
-
-  const sqlitePromise = saveToSqlite();
+  const sqlitePromise = Promise.resolve(saveSurveyResponseToStore(createdAt, email, payload));
 
   const dynamoPromise = dynamoDbDocClient
     ? dynamoDbDocClient.send(new PutCommand({
@@ -267,7 +277,7 @@ app.post('/api/survey', async (req, res) => {
       return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, s3Key: key });
     } catch (s3Err) {
       console.error('Failed to upload to S3:', s3Err);
-      return res.status(500).json({ success: false, error: 'Saved locally; failed to upload to S3' });
+      return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, s3Error: 'upload failed' });
     }
   }
 
@@ -285,10 +295,8 @@ app.post('/api/track', async (req, res) => {
   const createdAt = new Date().toISOString();
   const props = properties ? JSON.stringify(properties) : null;
 
-  // Save to SQLite
-  db.run('INSERT INTO analytics_events (created_at, event, properties, distinct_id) VALUES (?, ?, ?, ?)', [createdAt, event, props, distinct_id || null], function(err) {
-    if (err) console.error('Failed to save analytics event to SQLite:', err);
-  });
+  // Save to the local JSON store
+  saveAnalyticsEventToStore(createdAt, event, props, distinct_id || null);
 
   // Optionally forward to PostHog if configured
   const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || null;
@@ -316,4 +324,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, db };
+module.exports = { app, store };
