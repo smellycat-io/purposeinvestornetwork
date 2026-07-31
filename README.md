@@ -123,7 +123,7 @@ Set credentials with:
 
 ```bash
 export ADMIN_USER=admin
-export ADMIN_PASS=strongpassword
+export ADMIN_PASS=
 export SESSION_SECRET=some-secret-value
 ```
 
