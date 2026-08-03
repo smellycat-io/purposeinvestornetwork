@@ -7,13 +7,14 @@ try {
   // dotenv is optional in production
 }
 
-const Sentry = require('@sentry/node');
+const Sentry = require('@sentry/aws-serverless');
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'production',
   release: process.env.SENTRY_RELEASE || 'purpose-investor-network@latest',
   tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.0'),
+  integrations: [Sentry.awsLambdaIntegration()],
   dataCollection: {
     // Optional: uncomment to disable sending user data and HTTP bodies
     // userInfo: false,

@@ -1,6 +1,6 @@
 // Quick script to trigger an intentional error and flush to Sentry.
 require('./instrument.js');
-const Sentry = require('@sentry/node');
+const Sentry = require('@sentry/aws-serverless');
 
 (async () => {
   try {

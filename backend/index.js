@@ -1,7 +1,7 @@
 // IMPORTANT: Initialize Sentry before anything else
 require('./instrument.js');
 
-const { captureException, flush, setupExpressErrorHandler } = require('@sentry/node');
+const { captureException, flush, setupExpressErrorHandler } = require('@sentry/aws-serverless');
 const express = require('express');
 const { json, urlencoded, static: expressStatic } = express;
 const session = require('express-session');
