@@ -61,6 +61,9 @@ jobs:
         with:
           node-version: 18
 
+      - name: Generate backend/package.json from root dependencies
+        run: node scripts/generate-backend-package.js
+
       - name: Install & Package Backend
         run: |
           cd backend
