@@ -1,0 +1,16 @@
+{
+  "name": "purpose-investor-network-backend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "lambda.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.379.0",
+    "@aws-sdk/client-s3": "^3.379.0",
+    "@aws-sdk/lib-dynamodb": "^3.379.0",
+    "@sentry/node": "^8.55.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-session": "^1.17.4",
+    "serverless-http": "^3.1.0"
+  }
+}
