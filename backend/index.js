@@ -193,44 +193,11 @@ async function listResponses() {
     }));
 }
 
-app.get('/admin', requireAdmin, async (req, res) => {
-  try {
-    const responses = await listResponses();
-    res.send(`
-      <html>
-        <head>
-          <title>PIN Admin</title>
-          <style>body{font-family:system-ui, sans-serif; background:#f5f3ef; margin:0; padding:24px;} .page{max-width:1080px;margin:0 auto;} table{width:100%;border-collapse:collapse;background:#fff;box-shadow:0 16px 40px rgba(0,0,0,0.06);} th,td{padding:14px 12px;border-bottom:1px solid #e6e2dc;text-align:left;vertical-align:top;} th{background:#f7f3ee;} pre{margin:0;font-family:ui-monospace,monospace;font-size:0.95rem;white-space:pre-wrap;word-break:break-word;}</style>
-        </head>
-        <body>
-          <div class="page">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
-              <div><h1 style="margin:0;">PIN Survey Responses</h1><p style="margin:4px 0 0;color:#6b6b60;">Showing up to 200 responses.</p></div>
-              <a href="/logout" style="color:#d70010;font-weight:700;text-decoration:none;">Log out</a>
-            </div>
-            <table>
-              <thead><tr><th>ID</th><th>Created</th><th>Email</th><th>Answers</th></tr></thead>
-              <tbody>
-                ${responses.map(response => `
-                  <tr>
-                    <td>${response.id}</td>
-                    <td>${response.createdAt}</td>
-                    <td>${response.email || '—'}</td>
-                    <td><pre>${JSON.stringify(response.answers, null, 2)}</pre></td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </body>
-      </html>
-    `);
-  } catch (error) {
-    captureException(error);
-    console.error('Failed to load admin responses:', error);
-    res.status(500).send('Unable to load responses.');
-  }
+app.get('/admin', requireAdmin, (req, res) => {
+  res.sendFile(join(__dirname, 'admin/admin.html'));
 });
+
+app.use('/admin/assets', requireAdmin, expressStatic(join(__dirname, 'admin')));
 
 app.use(expressStatic(join(__dirname, '../front-end')));
 
@@ -299,6 +266,35 @@ app.get('/api/posts/:slug', async (req, res) => {
   } catch (error) {
     captureException(error);
     res.status(500).json({ error: 'Unable to load post.' });
+  }
+});
+
+// --- Admin reads (unfiltered/private data, for the dashboard) ---
+
+app.get('/api/admin/survey-responses', requireAdmin, async (req, res) => {
+  try {
+    res.json(await listResponses());
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load survey responses.' });
+  }
+});
+
+app.get('/api/admin/initiatives', requireAdmin, async (req, res) => {
+  try {
+    res.json(await content.listInitiatives());
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load initiatives.' });
+  }
+});
+
+app.get('/api/admin/posts', requireAdmin, async (req, res) => {
+  try {
+    res.json(await content.listPosts(req.query.type ? { type: req.query.type } : {}));
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load posts.' });
   }
 });
 

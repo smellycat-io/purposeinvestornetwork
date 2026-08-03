@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PIN Admin</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css">
+<link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <h1>PIN Admin</h1>
+    <a href="/logout" class="logout-link">Log out</a>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="survey" type="button">Survey Responses</button>
+    <button class="tab-btn" data-tab="posts" type="button">Blog Posts</button>
+    <button class="tab-btn" data-tab="content" type="button">Roundtables &amp; Initiatives</button>
+  </nav>
+
+  <section id="tab-survey" class="tab-panel active">
+    <div class="panel-header">
+      <h2>Survey Responses</h2>
+      <p class="muted">Showing up to 200 responses.</p>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>ID</th><th>Created</th><th>Email</th><th>Answers</th></tr></thead>
+      <tbody id="survey-rows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section id="tab-posts" class="tab-panel">
+    <div class="panel-header">
+      <h2>Blog Posts &amp; Updates</h2>
+      <button id="post-new-btn" class="btn btn-accent" type="button">New Post</button>
+    </div>
+
+    <form id="post-form" class="card form-card hidden">
+      <input type="hidden" id="post-id">
+      <div class="field-row">
+        <label class="field">
+          <span>Title</span>
+          <input type="text" id="post-title" required>
+        </label>
+        <label class="field">
+          <span>Author</span>
+          <input type="text" id="post-author">
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>Type</span>
+          <select id="post-type">
+            <option value="blog">Blog post</option>
+            <option value="update">Initiative update</option>
+          </select>
+        </label>
+        <label class="field" id="post-initiative-field">
+          <span>Initiative</span>
+          <select id="post-initiative"></select>
+        </label>
+      </div>
+      <label class="field">
+        <span>Body</span>
+        <div id="post-editor"></div>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-accent">Save Post</button>
+        <button type="button" id="post-cancel-btn" class="btn btn-ghost">Cancel</button>
+      </div>
+    </form>
+
+    <div id="posts-list" class="card-list">
+      <p class="muted">Loading…</p>
+    </div>
+  </section>
+
+  <section id="tab-content" class="tab-panel">
+    <div class="content-columns">
+      <div class="content-column">
+        <div class="panel-header">
+          <h2>Roundtables</h2>
+          <button id="roundtable-new-btn" class="btn btn-accent" type="button">New Roundtable</button>
+        </div>
+
+        <form id="roundtable-form" class="card form-card hidden">
+          <input type="hidden" id="roundtable-id">
+          <label class="field">
+            <span>Name</span>
+            <input type="text" id="roundtable-name" required>
+          </label>
+          <label class="field">
+            <span>Description</span>
+            <textarea id="roundtable-description" rows="3"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Save Roundtable</button>
+            <button type="button" id="roundtable-cancel-btn" class="btn btn-ghost">Cancel</button>
+          </div>
+        </form>
+
+        <div id="roundtables-list" class="card-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+
+      <div class="content-column">
+        <div class="panel-header">
+          <h2>Initiatives</h2>
+          <button id="initiative-new-btn" class="btn btn-accent" type="button">New Initiative</button>
+        </div>
+
+        <form id="initiative-form" class="card form-card hidden">
+          <input type="hidden" id="initiative-id">
+          <label class="field">
+            <span>Title</span>
+            <input type="text" id="initiative-title" required>
+          </label>
+          <label class="field">
+            <span>Description</span>
+            <textarea id="initiative-description" rows="3"></textarea>
+          </label>
+          <div class="field">
+            <span>Roundtables</span>
+            <div id="initiative-roundtable-checks" class="checkbox-list"></div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Save Initiative</button>
+            <button type="button" id="initiative-cancel-btn" class="btn btn-ghost">Cancel</button>
+          </div>
+        </form>
+
+        <div id="initiatives-list" class="card-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<script src="/admin/assets/admin.js"></script>
+</body>
+</html>
