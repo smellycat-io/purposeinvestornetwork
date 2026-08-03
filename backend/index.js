@@ -10,6 +10,8 @@ const fs = require('fs');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const sanitizeHtml = require('sanitize-html');
+const content = require('./content');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -231,6 +233,169 @@ app.get('/admin', requireAdmin, async (req, res) => {
 });
 
 app.use(expressStatic(join(__dirname, '../front-end')));
+
+function sanitizePostBody(html) {
+  return sanitizeHtml(html || '', {
+    allowedTags: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote', 'img'],
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt'],
+    },
+  });
+}
+
+// --- Public reads ---
+
+app.get('/api/roundtables', async (req, res) => {
+  try {
+    res.json(await content.listRoundtables());
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load roundtables.' });
+  }
+});
+
+app.get('/api/roundtables/:slug', async (req, res) => {
+  try {
+    const roundtable = await content.getRoundtableBySlug(req.params.slug);
+    if (!roundtable) return res.status(404).json({ error: 'Not found.' });
+    const [initiatives, updates] = await Promise.all([
+      content.listInitiativesForRoundtable(roundtable.id),
+      content.listPostsForRoundtable(roundtable.id),
+    ]);
+    res.json({ roundtable, initiatives, updates });
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load roundtable.' });
+  }
+});
+
+app.get('/api/initiatives/:slug', async (req, res) => {
+  try {
+    const initiative = await content.getInitiativeBySlug(req.params.slug);
+    if (!initiative) return res.status(404).json({ error: 'Not found.' });
+    const updates = await content.listPosts({ type: 'update', initiativeId: initiative.id });
+    res.json({ initiative, updates });
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load initiative.' });
+  }
+});
+
+app.get('/api/posts', async (req, res) => {
+  try {
+    res.json(await content.listPosts({ type: 'blog' }));
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load posts.' });
+  }
+});
+
+app.get('/api/posts/:slug', async (req, res) => {
+  try {
+    const post = await content.getPostBySlug(req.params.slug);
+    if (!post) return res.status(404).json({ error: 'Not found.' });
+    res.json(post);
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load post.' });
+  }
+});
+
+// --- Admin writes ---
+
+app.post('/api/admin/roundtables', requireAdmin, async (req, res) => {
+  try {
+    res.status(201).json(await content.createRoundtable(req.body));
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to create roundtable.' });
+  }
+});
+
+app.put('/api/admin/roundtables/:id', requireAdmin, async (req, res) => {
+  try {
+    const roundtable = await content.updateRoundtable(req.params.id, req.body);
+    if (!roundtable) return res.status(404).json({ error: 'Not found.' });
+    res.json(roundtable);
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to update roundtable.' });
+  }
+});
+
+app.delete('/api/admin/roundtables/:id', requireAdmin, async (req, res) => {
+  try {
+    await content.deleteRoundtable(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to delete roundtable.' });
+  }
+});
+
+app.post('/api/admin/initiatives', requireAdmin, async (req, res) => {
+  try {
+    res.status(201).json(await content.createInitiative(req.body));
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to create initiative.' });
+  }
+});
+
+app.put('/api/admin/initiatives/:id', requireAdmin, async (req, res) => {
+  try {
+    const initiative = await content.updateInitiative(req.params.id, req.body);
+    if (!initiative) return res.status(404).json({ error: 'Not found.' });
+    res.json(initiative);
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to update initiative.' });
+  }
+});
+
+app.delete('/api/admin/initiatives/:id', requireAdmin, async (req, res) => {
+  try {
+    await content.deleteInitiative(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to delete initiative.' });
+  }
+});
+
+app.post('/api/admin/posts', requireAdmin, async (req, res) => {
+  try {
+    const payload = { ...req.body, body: sanitizePostBody(req.body.body) };
+    res.status(201).json(await content.createPost(payload));
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to create post.' });
+  }
+});
+
+app.put('/api/admin/posts/:id', requireAdmin, async (req, res) => {
+  try {
+    const updates = { ...req.body };
+    if (updates.body) updates.body = sanitizePostBody(updates.body);
+    const post = await content.updatePost(req.params.id, updates);
+    if (!post) return res.status(404).json({ error: 'Not found.' });
+    res.json(post);
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to update post.' });
+  }
+});
+
+app.delete('/api/admin/posts/:id', requireAdmin, async (req, res) => {
+  try {
+    await content.deletePost(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to delete post.' });
+  }
+});
 
 app.post('/api/survey', async (req, res) => {
   const answers = req.body.answers || {};

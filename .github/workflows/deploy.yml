@@ -82,6 +82,10 @@ jobs:
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
+          AWS_DYNAMODB_TABLE: purpose-investor-network-survey-responses
+          AWS_ROUNDTABLES_TABLE: purpose-investor-network-roundtables
+          AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives
+          AWS_POSTS_TABLE: purpose-investor-network-posts
         run: |
           python - <<'PY'
           import json
@@ -111,7 +115,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -137,6 +141,10 @@ jobs:
               'SENTRY_RELEASE': env_values.get('SENTRY_RELEASE', current.get('SENTRY_RELEASE', 'purpose-investor-network@latest')),
               'SENTRY_TRACES_SAMPLE_RATE': env_values.get('SENTRY_TRACES_SAMPLE_RATE', current.get('SENTRY_TRACES_SAMPLE_RATE', '0.0')),
               'AWS_S3_BUCKET': env_values.get('AWS_S3_BUCKET', current.get('AWS_S3_BUCKET', '')),
+              'AWS_DYNAMODB_TABLE': env_values.get('AWS_DYNAMODB_TABLE', current.get('AWS_DYNAMODB_TABLE', '')),
+              'AWS_ROUNDTABLES_TABLE': env_values.get('AWS_ROUNDTABLES_TABLE', current.get('AWS_ROUNDTABLES_TABLE', '')),
+              'AWS_INITIATIVES_TABLE': env_values.get('AWS_INITIATIVES_TABLE', current.get('AWS_INITIATIVES_TABLE', '')),
+              'AWS_POSTS_TABLE': env_values.get('AWS_POSTS_TABLE', current.get('AWS_POSTS_TABLE', '')),
           })
 
           try:
@@ -173,6 +181,10 @@ jobs:
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
+          AWS_DYNAMODB_TABLE: purpose-investor-network-survey-responses
+          AWS_ROUNDTABLES_TABLE: purpose-investor-network-roundtables
+          AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives
+          AWS_POSTS_TABLE: purpose-investor-network-posts
         run: |
           python - <<'PY'
           import json
@@ -192,6 +204,10 @@ jobs:
               'SENTRY_RELEASE': os.getenv('SENTRY_RELEASE', 'purpose-investor-network@latest'),
               'SENTRY_TRACES_SAMPLE_RATE': os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.0'),
               'AWS_S3_BUCKET': os.getenv('AWS_S3_BUCKET', ''),
+              'AWS_DYNAMODB_TABLE': os.getenv('AWS_DYNAMODB_TABLE', ''),
+              'AWS_ROUNDTABLES_TABLE': os.getenv('AWS_ROUNDTABLES_TABLE', ''),
+              'AWS_INITIATIVES_TABLE': os.getenv('AWS_INITIATIVES_TABLE', ''),
+              'AWS_POSTS_TABLE': os.getenv('AWS_POSTS_TABLE', ''),
           }
 
           try:
@@ -243,6 +259,50 @@ jobs:
                   '--environment', json.dumps({'Variables': env_vars})
               ])
               print('Lambda created successfully.')
+          PY
+
+      - name: Ensure Lambda role has DynamoDB access
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role'
+          account_id = subprocess.check_output([
+              'aws', 'sts', 'get-caller-identity', '--query', 'Account', '--output', 'text'
+          ], text=True).strip()
+          region = 'us-east-1'
+          tables = [
+              'purpose-investor-network-survey-responses',
+              'purpose-investor-network-roundtables',
+              'purpose-investor-network-initiatives',
+              'purpose-investor-network-posts',
+          ]
+          table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
+
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [{
+                  'Effect': 'Allow',
+                  'Action': [
+                      'dynamodb:GetItem',
+                      'dynamodb:PutItem',
+                      'dynamodb:DeleteItem',
+                      'dynamodb:Scan',
+                      'dynamodb:Query',
+                  ],
+                  'Resource': table_arns,
+              }],
+          }
+
+          # put-role-policy is idempotent — creates or overwrites the named inline policy
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-content-tables',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('DynamoDB access policy applied to Lambda role.')
           PY
 
       - name: Update Lambda Function Code

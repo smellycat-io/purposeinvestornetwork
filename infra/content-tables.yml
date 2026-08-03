@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Purpose Investor Network content tables — Roundtables, Initiatives, and
+  Posts. Posts is a single unified table for both blog posts and initiative
+  updates (distinguished by a "type" attribute), since they're the same
+  shape: timestamped, rich-text, shown in a feed.
+
+Resources:
+  RoundtablesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-roundtables
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  InitiativesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-initiatives
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  PostsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-posts
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+Outputs:
+  RoundtablesTableName:
+    Value: !Ref RoundtablesTable
+  InitiativesTableName:
+    Value: !Ref InitiativesTable
+  PostsTableName:
+    Value: !Ref PostsTable
