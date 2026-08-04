@@ -360,10 +360,7 @@ app.put('/api/admin/initiatives/:id', requireAdmin, async (req, res) => {
   try {
     const initiative = await content.updateInitiative(req.params.id, req.body);
     if (!initiative) {
-      captureMessage(`Initiative update 404: id "${req.params.id}" not found`, {
-        level: 'warning',
-        extra: { id: req.params.id, bodyKeys: Object.keys(req.body || {}) },
-      });
+      captureMessage(`Initiative update 404: id "${req.params.id}" not found (body keys: ${Object.keys(req.body || {}).join(', ')})`, 'warning');
       return res.status(404).json({ error: 'Not found.' });
     }
     res.json(initiative);
@@ -586,10 +583,8 @@ app.post('/api/track', async (req, res) => {
 // a client calling a URL/method that isn't wired up, vs. business-logic
 // "not found" responses (which already report individually above).
 app.use(['/api', '/admin'], (req, res) => {
-  captureMessage(`Unmatched route 404: ${req.method} ${req.originalUrl}`, {
-    level: 'warning',
-    extra: { method: req.method, path: req.originalUrl, authenticated: !!(req.session && req.session.loggedIn) },
-  });
+  const authed = !!(req.session && req.session.loggedIn);
+  captureMessage(`Unmatched route 404: ${req.method} ${req.originalUrl} (authenticated: ${authed})`, 'warning');
   res.status(404).json({ error: 'Not found.' });
 });
 
