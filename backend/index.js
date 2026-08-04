@@ -214,15 +214,15 @@ function sanitizePostBody(html) {
 // --- Public content pages (clean URLs, static HTML + client-side fetch) ---
 
 app.get('/roundtables', (req, res) => {
-  res.sendFile(join(__dirname, '../front-end/roundtables.html'));
+  res.sendFile(join(__dirname, 'pages/roundtables.html'));
 });
 
 app.get('/roundtables/initiatives/:slug', (req, res) => {
-  res.sendFile(join(__dirname, '../front-end/initiative.html'));
+  res.sendFile(join(__dirname, 'pages/initiative.html'));
 });
 
 app.get('/roundtables/:slug', (req, res) => {
-  res.sendFile(join(__dirname, '../front-end/roundtable.html'));
+  res.sendFile(join(__dirname, 'pages/roundtable.html'));
 });
 
 // --- Public reads ---
