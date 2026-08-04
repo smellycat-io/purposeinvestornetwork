@@ -574,7 +574,7 @@
           dsn: window.ENV.SENTRY_BROWSER_DSN,
           environment: window.ENV.SENTRY_ENVIRONMENT,
           release: window.ENV.SENTRY_RELEASE,
-          integrations: [new Sentry.BrowserTracing()],
+          integrations: [Sentry.browserTracingIntegration()],
           tracesSampleRate: window.ENV.SENTRY_TRACES_SAMPLE_RATE || 0
         });
         Sentry.setTag('page', 'survey');
