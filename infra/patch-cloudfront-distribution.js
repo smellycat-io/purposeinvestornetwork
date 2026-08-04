@@ -47,6 +47,13 @@ if (apiDomain.includes('://')) {
 
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
+// AWS's API omits the "Items" key entirely when Quantity is 0, rather than
+// returning an empty array — normalize that so the rest of this script
+// doesn't have to special-case it.
+if (!config.Origins.Items) config.Origins.Items = [];
+if (!config.CacheBehaviors) config.CacheBehaviors = { Quantity: 0 };
+if (!config.CacheBehaviors.Items) config.CacheBehaviors.Items = [];
+
 // Add the API origin if it's not already there (safe to re-run)
 const hasApiOrigin = config.Origins.Items.some((o) => o.Id === API_ORIGIN_ID);
 if (!hasApiOrigin) {

@@ -211,6 +211,20 @@ function sanitizePostBody(html) {
   });
 }
 
+// --- Public content pages (clean URLs, static HTML + client-side fetch) ---
+
+app.get('/roundtables', (req, res) => {
+  res.sendFile(join(__dirname, '../front-end/roundtables.html'));
+});
+
+app.get('/roundtables/initiatives/:slug', (req, res) => {
+  res.sendFile(join(__dirname, '../front-end/initiative.html'));
+});
+
+app.get('/roundtables/:slug', (req, res) => {
+  res.sendFile(join(__dirname, '../front-end/roundtable.html'));
+});
+
 // --- Public reads ---
 
 app.get('/api/roundtables', async (req, res) => {

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roundtables | Purpose Investor Network</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="site-topbar">
+    <div class="site-topbar__inner">
+      <a class="site-topbar__logo" href="/">
+        <img src="/imgs/logo.png" alt="Purpose Investor Network logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
+        <span class="site-topbar__logo-fallback">Purpose Investor Network</span>
+      </a>
+      <nav class="site-topbar__nav">
+        <a href="/roundtables" class="active">Roundtables</a>
+        <a href="/pin-member-questionnaire.html">Take Our Survey</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="page-banner" style="background-image: url('/imgs/collab_table.jpg');">
+    <div class="page-banner__inner">
+      <div class="page-banner-text">
+        <h2>Roundtables</h2>
+        <p>Cause-based member groups that turn shared passions into shared investment impact.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <main>
+      <div id="roundtables-list" class="card-grid">
+        <p class="muted">Loading roundtables&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/content-shared.js"></script>
+  <script>
+    (async function () {
+      const listEl = document.getElementById('roundtables-list');
+      try {
+        const roundtables = await fetchJson('/api/roundtables');
+        if (!roundtables.length) {
+          listEl.innerHTML = '<p class="muted">No roundtables have been published yet. Check back soon.</p>';
+          return;
+        }
+        listEl.innerHTML = roundtables.map((r) => `
+          <a class="card-link" href="/roundtables/${encodeURIComponent(r.slug)}">
+            <h3>${escapeHtml(r.name)}</h3>
+            <p>${escapeHtml(r.description)}</p>
+          </a>
+        `).join('');
+      } catch (err) {
+        listEl.innerHTML = '<p class="muted">Unable to load roundtables right now. Please try again later.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>
