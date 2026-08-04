@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(curl -s \"https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js\" -o /tmp/sentry-bundle.js)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

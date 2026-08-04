@@ -1,7 +1,7 @@
 // IMPORTANT: Initialize Sentry before anything else
 require('./instrument.js');
 
-const { captureException, flush, setupExpressErrorHandler } = require('@sentry/aws-serverless');
+const { captureException, captureMessage, flush, setupExpressErrorHandler } = require('@sentry/aws-serverless');
 const express = require('express');
 const { json, urlencoded, static: expressStatic } = express;
 const session = require('express-session');
@@ -326,7 +326,10 @@ app.post('/api/admin/roundtables', requireAdmin, async (req, res) => {
 app.put('/api/admin/roundtables/:id', requireAdmin, async (req, res) => {
   try {
     const roundtable = await content.updateRoundtable(req.params.id, req.body);
-    if (!roundtable) return res.status(404).json({ error: 'Not found.' });
+    if (!roundtable) {
+      captureMessage(`Roundtable update 404: id "${req.params.id}" not found (body keys: ${Object.keys(req.body || {}).join(', ')})`, 'warning');
+      return res.status(404).json({ error: 'Not found.' });
+    }
     res.json(roundtable);
   } catch (error) {
     captureException(error);
@@ -356,7 +359,13 @@ app.post('/api/admin/initiatives', requireAdmin, async (req, res) => {
 app.put('/api/admin/initiatives/:id', requireAdmin, async (req, res) => {
   try {
     const initiative = await content.updateInitiative(req.params.id, req.body);
-    if (!initiative) return res.status(404).json({ error: 'Not found.' });
+    if (!initiative) {
+      captureMessage(`Initiative update 404: id "${req.params.id}" not found`, {
+        level: 'warning',
+        extra: { id: req.params.id, bodyKeys: Object.keys(req.body || {}) },
+      });
+      return res.status(404).json({ error: 'Not found.' });
+    }
     res.json(initiative);
   } catch (error) {
     captureException(error);
@@ -568,6 +577,20 @@ app.post('/api/track', async (req, res) => {
   }
 
   return res.json({ success: true });
+});
+
+// Catch-all for API/admin requests that don't match any route at all.
+// Express's default 404 handling never reaches Sentry's error middleware
+// (it's not a thrown error), so without this, a routing gap here is
+// invisible to Sentry — this is the actual blind spot for a 404 caused by
+// a client calling a URL/method that isn't wired up, vs. business-logic
+// "not found" responses (which already report individually above).
+app.use(['/api', '/admin'], (req, res) => {
+  captureMessage(`Unmatched route 404: ${req.method} ${req.originalUrl}`, {
+    level: 'warning',
+    extra: { method: req.method, path: req.originalUrl, authenticated: !!(req.session && req.session.loggedIn) },
+  });
+  res.status(404).json({ error: 'Not found.' });
 });
 
 setupExpressErrorHandler(app);
