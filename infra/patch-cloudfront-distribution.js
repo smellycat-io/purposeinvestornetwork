@@ -31,6 +31,8 @@ const BACKEND_PATH_PATTERNS = [
   '/api/*',
   '/env.js',
   '/sentry-test',
+  '/roundtables',
+  '/roundtables/*',
 ];
 
 const [, , configPath, apiDomain] = process.argv;
