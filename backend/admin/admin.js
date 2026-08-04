@@ -49,6 +49,128 @@
     return response.json();
   }
 
+  // --- Image uploads ---
+
+  const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024;
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+      reader.onerror = () => reject(new Error('Unable to read file.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadImage(file) {
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new Error('Image is too large. Please use a file under 3.5MB.');
+    }
+    const dataBase64 = await readFileAsBase64(file);
+    const result = await api('/api/admin/uploads', {
+      method: 'POST',
+      body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }),
+    });
+    return result.url;
+  }
+
+  function setImagePreview(prefix, url) {
+    const urlField = document.getElementById(prefix + '-image-url');
+    const preview = document.getElementById(prefix + '-image-preview');
+    urlField.value = url || '';
+    if (url) {
+      preview.src = url;
+      preview.classList.add('visible');
+    } else {
+      preview.removeAttribute('src');
+      preview.classList.remove('visible');
+    }
+  }
+
+  // --- Shared image picker (upload, or browse past uploads / stock photos) ---
+
+  let imagePickerField = null;
+
+  function renderImageGrid(containerId, images, emptyMessage) {
+    const container = document.getElementById(containerId);
+    if (!images.length) {
+      container.innerHTML = `<p class="muted">${escapeHtml(emptyMessage)}</p>`;
+      return;
+    }
+    container.innerHTML = images.map((img) => `
+      <img class="image-picker__thumb" src="${escapeHtml(img.url)}" alt="${escapeHtml(img.filename || '')}" data-url="${escapeHtml(img.url)}">
+    `).join('');
+  }
+
+  async function loadImagePickerGrids() {
+    const uploadsContainer = document.getElementById('image-picker-uploads');
+    const stockContainer = document.getElementById('image-picker-stock');
+    uploadsContainer.innerHTML = '<p class="muted">Loading…</p>';
+    stockContainer.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const images = await api('/api/admin/images');
+      renderImageGrid('image-picker-uploads', images, 'No uploads yet.');
+    } catch (err) {
+      uploadsContainer.innerHTML = '<p class="muted">Failed to load uploads.</p>';
+    }
+    try {
+      const stock = await api('/api/admin/stock-images');
+      renderImageGrid('image-picker-stock', stock, 'No stock photos found.');
+    } catch (err) {
+      stockContainer.innerHTML = '<p class="muted">Failed to load stock photos.</p>';
+    }
+  }
+
+  function openImagePicker(prefix) {
+    imagePickerField = prefix;
+    document.getElementById('image-picker').classList.remove('hidden');
+    loadImagePickerGrids();
+  }
+
+  function closeImagePicker() {
+    imagePickerField = null;
+    document.getElementById('image-picker').classList.add('hidden');
+  }
+
+  function initImagePicker() {
+    document.querySelectorAll('[data-action="choose-image"]').forEach((btn) => {
+      btn.addEventListener('click', () => openImagePicker(btn.dataset.field));
+    });
+
+    document.getElementById('image-picker-close-btn').addEventListener('click', closeImagePicker);
+    document.getElementById('image-picker').addEventListener('click', (event) => {
+      if (event.target.id === 'image-picker') closeImagePicker();
+    });
+
+    document.querySelectorAll('#image-picker-uploads, #image-picker-stock').forEach((grid) => {
+      grid.addEventListener('click', (event) => {
+        const thumb = event.target.closest('.image-picker__thumb');
+        if (!thumb || !imagePickerField) return;
+        setImagePreview(imagePickerField, thumb.dataset.url);
+        closeImagePicker();
+      });
+    });
+
+    const uploadInput = document.getElementById('image-picker-upload-input');
+    uploadInput.addEventListener('change', async () => {
+      const file = uploadInput.files[0];
+      if (!file || !imagePickerField) return;
+      const status = document.getElementById('image-picker-status');
+      status.textContent = 'Uploading…';
+      try {
+        const url = await uploadImage(file);
+        setImagePreview(imagePickerField, url);
+        status.textContent = '';
+        closeImagePicker();
+      } catch (err) {
+        status.textContent = '';
+        showToast(err.message, true);
+      } finally {
+        uploadInput.value = '';
+      }
+    });
+  }
+
   // --- Tabs ---
 
   function initTabs() {
@@ -261,6 +383,7 @@
     document.getElementById('roundtable-id').value = '';
     document.getElementById('roundtable-name').value = '';
     document.getElementById('roundtable-description').value = '';
+    setImagePreview('roundtable', null);
     document.getElementById('roundtable-form').classList.add('hidden');
   }
 
@@ -270,6 +393,7 @@
     document.getElementById('roundtable-id').value = roundtable ? roundtable.id : '';
     document.getElementById('roundtable-name').value = roundtable ? roundtable.name : '';
     document.getElementById('roundtable-description').value = roundtable ? roundtable.description || '' : '';
+    setImagePreview('roundtable', roundtable ? roundtable.imageUrl : null);
   }
 
   function renderRoundtables() {
@@ -280,6 +404,7 @@
     }
     list.innerHTML = state.roundtables.map((rt) => `
       <div class="list-item" data-id="${escapeHtml(rt.id)}">
+        ${rt.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(rt.imageUrl)}" alt="">` : ''}
         <div class="list-item-body">
           <h3>${escapeHtml(rt.name)}</h3>
           <p>${escapeHtml(rt.description || '')}</p>
@@ -297,6 +422,7 @@
     const payload = {
       name: document.getElementById('roundtable-name').value.trim(),
       description: document.getElementById('roundtable-description').value.trim(),
+      imageUrl: document.getElementById('roundtable-image-url').value || null,
     };
     try {
       if (state.editingRoundtableId) {
@@ -345,6 +471,7 @@
     document.getElementById('initiative-title').value = '';
     document.getElementById('initiative-description').value = '';
     renderRoundtableChecks([]);
+    setImagePreview('initiative', null);
     document.getElementById('initiative-form').classList.add('hidden');
   }
 
@@ -355,6 +482,7 @@
     document.getElementById('initiative-title').value = initiative ? initiative.title : '';
     document.getElementById('initiative-description').value = initiative ? initiative.description || '' : '';
     renderRoundtableChecks(initiative ? initiative.roundtableIds : []);
+    setImagePreview('initiative', initiative ? initiative.imageUrl : null);
   }
 
   function renderInitiatives() {
@@ -369,6 +497,7 @@
       .join(', ') || 'No roundtables linked';
     list.innerHTML = state.initiatives.map((initiative) => `
       <div class="list-item" data-id="${escapeHtml(initiative.id)}">
+        ${initiative.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(initiative.imageUrl)}" alt="">` : ''}
         <div class="list-item-body">
           <h3>${escapeHtml(initiative.title)}</h3>
           <p>${escapeHtml(initiative.description || '')}</p>
@@ -389,6 +518,7 @@
       title: document.getElementById('initiative-title').value.trim(),
       description: document.getElementById('initiative-description').value.trim(),
       roundtableIds,
+      imageUrl: document.getElementById('initiative-image-url').value || null,
     };
     try {
       if (state.editingInitiativeId) {
@@ -432,6 +562,8 @@
   }
 
   function initContentTab() {
+    initImagePicker();
+
     document.getElementById('roundtable-new-btn').addEventListener('click', () => openRoundtableForm(null));
     document.getElementById('roundtable-cancel-btn').addEventListener('click', resetRoundtableForm);
     document.getElementById('roundtable-form').addEventListener('submit', saveRoundtable);

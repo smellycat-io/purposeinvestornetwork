@@ -25,3 +25,7 @@ function lastPathSegment() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   return decodeURIComponent(parts[parts.length - 1] || '');
 }
+
+function cardImageHtml(url) {
+  return url ? `<img class="card-link__image" src="${escapeHtml(url)}" alt="" />` : '';
+}

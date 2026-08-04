@@ -11,6 +11,7 @@ const AWS_REGION = process.env.AWS_REGION || undefined;
 const ROUNDTABLES_TABLE = process.env.AWS_ROUNDTABLES_TABLE || null;
 const INITIATIVES_TABLE = process.env.AWS_INITIATIVES_TABLE || null;
 const POSTS_TABLE = process.env.AWS_POSTS_TABLE || null;
+const IMAGES_TABLE = process.env.AWS_IMAGES_TABLE || null;
 
 let docClient = null;
 function getDocClient() {
@@ -53,12 +54,13 @@ async function getRoundtableBySlug(slug) {
   return items.find((r) => r.slug === slug) || null;
 }
 
-async function createRoundtable({ name, description }) {
+async function createRoundtable({ name, description, imageUrl }) {
   const item = {
     id: makeId(),
     name,
     slug: slugify(name),
     description: description || '',
+    imageUrl: imageUrl || null,
     createdAt: new Date().toISOString(),
   };
   await getDocClient().send(new PutCommand({ TableName: ROUNDTABLES_TABLE, Item: item }));
@@ -95,13 +97,14 @@ async function listInitiativesForRoundtable(roundtableId) {
   return items.filter((i) => Array.isArray(i.roundtableIds) && i.roundtableIds.includes(roundtableId));
 }
 
-async function createInitiative({ title, description, roundtableIds }) {
+async function createInitiative({ title, description, roundtableIds, imageUrl }) {
   const item = {
     id: makeId(),
     title,
     slug: slugify(title),
     description: description || '',
     roundtableIds: Array.isArray(roundtableIds) ? roundtableIds : [],
+    imageUrl: imageUrl || null,
     createdAt: new Date().toISOString(),
   };
   await getDocClient().send(new PutCommand({ TableName: INITIATIVES_TABLE, Item: item }));
@@ -175,6 +178,27 @@ async function deletePost(id) {
   await getDocClient().send(new DeleteCommand({ TableName: POSTS_TABLE, Key: { id } }));
 }
 
+// --- Images (a reusable library of uploaded images, so admins can browse
+// and reuse past uploads instead of re-uploading the same photo) ---
+
+async function listImages() {
+  const items = await scanAll(IMAGES_TABLE);
+  return items.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+}
+
+async function createImage({ url, filename, contentType, size }) {
+  const item = {
+    id: makeId(),
+    url,
+    filename: filename || null,
+    contentType: contentType || null,
+    size: size || null,
+    uploadedAt: new Date().toISOString(),
+  };
+  await getDocClient().send(new PutCommand({ TableName: IMAGES_TABLE, Item: item }));
+  return item;
+}
+
 module.exports = {
   listRoundtables,
   getRoundtableBySlug,
@@ -193,4 +217,6 @@ module.exports = {
   createPost,
   updatePost,
   deletePost,
+  listImages,
+  createImage,
 };

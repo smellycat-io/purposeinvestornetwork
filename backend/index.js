@@ -7,7 +7,7 @@ const { json, urlencoded, static: expressStatic } = express;
 const session = require('express-session');
 const { join } = require('path');
 const fs = require('fs');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const sanitizeHtml = require('sanitize-html');
@@ -93,7 +93,7 @@ if (DYNAMODB_TABLE) {
   console.log('DynamoDB enabled. Table:', DYNAMODB_TABLE);
 }
 
-app.use(json({ limit: '2mb' }));
+app.use(json({ limit: '5mb' }));
 app.use(urlencoded({ extended: true }));
 app.use(session({
   secret: SESSION_SECRET,
@@ -407,6 +407,76 @@ app.delete('/api/admin/posts/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Images for roundtable/initiative cards and banners. Stored in the same
+// public S3 bucket that serves the front-end, so uploaded images are
+// reachable at a root-relative URL through the existing CloudFront default
+// behavior — no separate hosting or cache-behavior setup needed.
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024; // keeps the base64 payload under the 6MB Lambda request-payload limit
+
+app.post('/api/admin/uploads', requireAdmin, async (req, res) => {
+  if (!s3Client) {
+    return res.status(503).json({ error: 'Image uploads are not configured.' });
+  }
+  const { filename, contentType, dataBase64 } = req.body || {};
+  if (!filename || !contentType || !dataBase64) {
+    return res.status(400).json({ error: 'Missing filename, contentType, or image data.' });
+  }
+  if (!contentType.startsWith('image/')) {
+    return res.status(400).json({ error: 'Only image uploads are allowed.' });
+  }
+  const buffer = Buffer.from(dataBase64, 'base64');
+  if (buffer.length > MAX_UPLOAD_BYTES) {
+    return res.status(413).json({ error: 'Image is too large. Please use a file under 3.5MB.' });
+  }
+  try {
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '-');
+    const key = `uploads/${Date.now()}-${Math.floor(Math.random() * 1000000)}-${safeName}`;
+    await s3Client.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }));
+    const url = `/${key}`;
+    const image = await content.createImage({ url, filename, contentType, size: buffer.length });
+    res.status(201).json(image);
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to upload image.' });
+  }
+});
+
+app.get('/api/admin/images', requireAdmin, async (req, res) => {
+  try {
+    res.json(await content.listImages());
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load images.' });
+  }
+});
+
+app.get('/api/admin/stock-images', requireAdmin, async (req, res) => {
+  if (!s3Client) {
+    return res.json([]);
+  }
+  try {
+    const result = await s3Client.send(new ListObjectsV2Command({
+      Bucket: S3_BUCKET,
+      Prefix: 'imgs/stock/',
+    }));
+    const images = (result.Contents || [])
+      .filter((obj) => obj.Key !== 'imgs/stock/')
+      .map((obj) => ({
+        url: `/${obj.Key}`,
+        filename: obj.Key.split('/').pop(),
+      }));
+    res.json(images);
+  } catch (error) {
+    captureException(error);
+    res.status(500).json({ error: 'Unable to load stock images.' });
+  }
+});
+
 app.post('/api/survey', async (req, res) => {
   const answers = req.body.answers || {};
   const email = (answers.email || '').trim() || null;
@@ -492,6 +562,17 @@ app.post('/api/track', async (req, res) => {
 });
 
 setupExpressErrorHandler(app);
+
+// Fallback JSON error handler (e.g. oversized request bodies rejected by
+// body-parser before a route ever runs) so clients get a clean error
+// instead of Express's default HTML error page.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body is too large.' });
+  }
+  res.status(err.status || 500).json({ error: 'Something went wrong.' });
+});
 
 if (require.main === module) {
   app.listen(PORT, () => {

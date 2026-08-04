@@ -1,9 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Purpose Investor Network content tables — Roundtables, Initiatives, and
-  Posts. Posts is a single unified table for both blog posts and initiative
-  updates (distinguished by a "type" attribute), since they're the same
-  shape: timestamped, rich-text, shown in a feed.
+  Purpose Investor Network content tables — Roundtables, Initiatives, Posts,
+  and Images. Posts is a single unified table for both blog posts and
+  initiative updates (distinguished by a "type" attribute), since they're
+  the same shape: timestamped, rich-text, shown in a feed. Images is a
+  library of uploaded image metadata (S3 key/URL + upload info) that admins
+  can browse and reuse across roundtables and initiatives.
 
 Resources:
   RoundtablesTable:
@@ -42,6 +44,18 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
+  ImagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-images
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
 Outputs:
   RoundtablesTableName:
     Value: !Ref RoundtablesTable
@@ -49,3 +63,5 @@ Outputs:
     Value: !Ref InitiativesTable
   PostsTableName:
     Value: !Ref PostsTable
+  ImagesTableName:
+    Value: !Ref ImagesTable

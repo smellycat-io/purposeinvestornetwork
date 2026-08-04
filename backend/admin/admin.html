@@ -95,6 +95,14 @@
             <span>Description</span>
             <textarea id="roundtable-description" rows="3"></textarea>
           </label>
+          <div class="field">
+            <span>Image (used on cards and the roundtable's banner)</span>
+            <input type="hidden" id="roundtable-image-url">
+            <div class="image-field">
+              <img id="roundtable-image-preview" class="image-preview" alt="">
+              <button type="button" class="btn-small" data-action="choose-image" data-field="roundtable">Choose Image</button>
+            </div>
+          </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-accent">Save Roundtable</button>
             <button type="button" id="roundtable-cancel-btn" class="btn btn-ghost">Cancel</button>
@@ -126,6 +134,14 @@
             <span>Roundtables</span>
             <div id="initiative-roundtable-checks" class="checkbox-list"></div>
           </div>
+          <div class="field">
+            <span>Image (used on cards and the initiative's banner)</span>
+            <input type="hidden" id="initiative-image-url">
+            <div class="image-field">
+              <img id="initiative-image-preview" class="image-preview" alt="">
+              <button type="button" class="btn-small" data-action="choose-image" data-field="initiative">Choose Image</button>
+            </div>
+          </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-accent">Save Initiative</button>
             <button type="button" id="initiative-cancel-btn" class="btn btn-ghost">Cancel</button>
@@ -138,6 +154,30 @@
       </div>
     </div>
   </section>
+</div>
+
+<div id="image-picker" class="image-picker hidden">
+  <div class="image-picker__panel">
+    <div class="image-picker__header">
+      <h3>Choose an image</h3>
+      <button type="button" id="image-picker-close-btn" class="btn-small">Close</button>
+    </div>
+    <label class="btn btn-accent image-picker__upload-btn">
+      Upload new image
+      <input type="file" id="image-picker-upload-input" accept="image/*" hidden>
+    </label>
+    <span id="image-picker-status" class="muted"></span>
+
+    <div class="image-picker__section">
+      <h4>Your uploads</h4>
+      <div id="image-picker-uploads" class="image-picker__grid"><p class="muted">Loading…</p></div>
+    </div>
+
+    <div class="image-picker__section">
+      <h4>Stock photos</h4>
+      <div id="image-picker-stock" class="image-picker__grid"><p class="muted">Loading…</p></div>
+    </div>
+  </div>
 </div>
 
 <div id="toast" class="toast hidden"></div>

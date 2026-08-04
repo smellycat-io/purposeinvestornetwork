@@ -90,6 +90,7 @@ jobs:
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_BROWSER_DSN: ${{ secrets.SENTRY_BROWSER_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
@@ -99,6 +100,7 @@ jobs:
           AWS_ROUNDTABLES_TABLE: purpose-investor-network-roundtables
           AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives
           AWS_POSTS_TABLE: purpose-investor-network-posts
+          AWS_IMAGES_TABLE: purpose-investor-network-images
         run: |
           python - <<'PY'
           import json
@@ -128,7 +130,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -150,6 +152,7 @@ jobs:
               'ADMIN_PASS': env_values.get('ADMIN_PASS', current.get('ADMIN_PASS', 'password')),
               'SESSION_SECRET': env_values.get('SESSION_SECRET', current.get('SESSION_SECRET', '')),
               'SENTRY_DSN': env_values.get('SENTRY_DSN', current.get('SENTRY_DSN', '')),
+              'SENTRY_BROWSER_DSN': env_values.get('SENTRY_BROWSER_DSN', current.get('SENTRY_BROWSER_DSN', '')),
               'SENTRY_ENVIRONMENT': env_values.get('SENTRY_ENVIRONMENT', current.get('SENTRY_ENVIRONMENT', 'production')),
               'SENTRY_RELEASE': env_values.get('SENTRY_RELEASE', current.get('SENTRY_RELEASE', 'purpose-investor-network@latest')),
               'SENTRY_TRACES_SAMPLE_RATE': env_values.get('SENTRY_TRACES_SAMPLE_RATE', current.get('SENTRY_TRACES_SAMPLE_RATE', '0.0')),
@@ -158,6 +161,7 @@ jobs:
               'AWS_ROUNDTABLES_TABLE': env_values.get('AWS_ROUNDTABLES_TABLE', current.get('AWS_ROUNDTABLES_TABLE', '')),
               'AWS_INITIATIVES_TABLE': env_values.get('AWS_INITIATIVES_TABLE', current.get('AWS_INITIATIVES_TABLE', '')),
               'AWS_POSTS_TABLE': env_values.get('AWS_POSTS_TABLE', current.get('AWS_POSTS_TABLE', '')),
+              'AWS_IMAGES_TABLE': env_values.get('AWS_IMAGES_TABLE', current.get('AWS_IMAGES_TABLE', '')),
           })
 
           try:
@@ -189,6 +193,7 @@ jobs:
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_BROWSER_DSN: ${{ secrets.SENTRY_BROWSER_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
           SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
@@ -198,6 +203,7 @@ jobs:
           AWS_ROUNDTABLES_TABLE: purpose-investor-network-roundtables
           AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives
           AWS_POSTS_TABLE: purpose-investor-network-posts
+          AWS_IMAGES_TABLE: purpose-investor-network-images
         run: |
           python - <<'PY'
           import json
@@ -213,6 +219,7 @@ jobs:
               'ADMIN_PASS': os.getenv('ADMIN_PASS', 'password'),
               'SESSION_SECRET': os.getenv('SESSION_SECRET', ''),
               'SENTRY_DSN': os.getenv('SENTRY_DSN', ''),
+              'SENTRY_BROWSER_DSN': os.getenv('SENTRY_BROWSER_DSN', ''),
               'SENTRY_ENVIRONMENT': os.getenv('SENTRY_ENVIRONMENT', 'production'),
               'SENTRY_RELEASE': os.getenv('SENTRY_RELEASE', 'purpose-investor-network@latest'),
               'SENTRY_TRACES_SAMPLE_RATE': os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.0'),
@@ -221,6 +228,7 @@ jobs:
               'AWS_ROUNDTABLES_TABLE': os.getenv('AWS_ROUNDTABLES_TABLE', ''),
               'AWS_INITIATIVES_TABLE': os.getenv('AWS_INITIATIVES_TABLE', ''),
               'AWS_POSTS_TABLE': os.getenv('AWS_POSTS_TABLE', ''),
+              'AWS_IMAGES_TABLE': os.getenv('AWS_IMAGES_TABLE', ''),
           }
 
           try:
@@ -290,6 +298,7 @@ jobs:
               'purpose-investor-network-roundtables',
               'purpose-investor-network-initiatives',
               'purpose-investor-network-posts',
+              'purpose-investor-network-images',
           ]
           table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
 
