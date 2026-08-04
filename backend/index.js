@@ -502,6 +502,11 @@ app.post('/api/survey', async (req, res) => {
   const sqliteResult = responses[0].status === 'fulfilled' ? responses[0].value : null;
   const dynamoResult = responses[1].status === 'fulfilled' ? responses[1].value : null;
 
+  // Report each failed write even when the other succeeds — a silently
+  // broken DynamoDB path is worth knowing about, not just a total outage.
+  if (responses[0].status === 'rejected') captureException(responses[0].reason);
+  if (responses[1].status === 'rejected') captureException(responses[1].reason);
+
   if (!sqliteResult && !dynamoResult) {
     const saveError = new Error('Unable to save survey response');
     captureException(saveError);
@@ -541,7 +546,11 @@ app.post('/api/track', async (req, res) => {
   const props = properties ? JSON.stringify(properties) : null;
 
   // Save to the local JSON store
-  saveAnalyticsEventToStore(createdAt, event, props, distinct_id || null);
+  try {
+    saveAnalyticsEventToStore(createdAt, event, props, distinct_id || null);
+  } catch (error) {
+    captureException(error);
+  }
 
   // Optionally forward to PostHog if configured
   const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY || null;
