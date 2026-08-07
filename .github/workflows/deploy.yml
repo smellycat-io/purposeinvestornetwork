@@ -10,6 +10,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Merge shared assets into front-end for deployment
+        run: cp -r shared/. front-end/
+
       - name: Deploy frontend to public S3
         uses: jakejarvis/s3-sync-action@v0.5.1
         with:

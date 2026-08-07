@@ -199,7 +199,8 @@ app.get('/admin', requireAdmin, (req, res) => {
 
 app.use('/admin/assets', requireAdmin, expressStatic(join(__dirname, 'admin')));
 
-app.use(expressStatic(join(__dirname, '../front-end')));
+app.use(expressStatic(join(__dirname, '../../shared')));
+app.use(expressStatic(join(__dirname, '../../front-end')));
 
 function sanitizePostBody(html) {
   return sanitizeHtml(html || '', {

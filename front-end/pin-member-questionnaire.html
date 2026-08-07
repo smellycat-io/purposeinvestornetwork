@@ -554,18 +554,9 @@
 </style>
 </head>
 <body>
-    <div class="site-topbar">
-      <div class="site-topbar__inner">
-        <a class="site-topbar__logo" href="/">
-          <img src="/imgs/logos/pin_logo.png" alt="Purpose Investor Network logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" />
-          <span class="site-topbar__logo-fallback">Purpose Investor Network</span>
-        </a>
-        <nav class="site-topbar__nav">
-          <a href="/roundtables">Roundtables</a>
-          <a href="/pin-member-questionnaire.html" class="active">Take Our Survey</a>
-        </nav>
-      </div>
-    </div>
+    <div class="site-topbar" id="site-topbar"></div>
+    <script src="/nav.js"></script>
+    <script>renderFrontendNav();</script>
 
     <script src="/env.js"></script>
     <script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
