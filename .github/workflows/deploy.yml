@@ -71,18 +71,18 @@ jobs:
         with:
           node-version: 18
 
-      - name: Generate backend/package.json from root dependencies
+      - name: Generate private/backend/package.json from root dependencies
         run: node scripts/generate-backend-package.js
 
       - name: Install & Package Backend
         run: |
-          cd backend
+          cd private/backend
           npm install --production
-          if [ -f ../.env ]; then
-            cp ../.env .env
+          if [ -f ../../.env ]; then
+            cp ../../.env .env
           fi
-          zip -r ../backend.zip .
-          cd ..
+          zip -r ../../backend.zip .
+          cd ../..
 
       - name: Apply environment variables to Lambda
         env:

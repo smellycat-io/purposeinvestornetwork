@@ -4,7 +4,7 @@ Description: >
   Lambda. Does NOT create the Lambda, its IAM role, or a CloudFront
   distribution — the Lambda/role already exist (managed by GitHub Actions),
   and the CloudFront distribution (E20BW0W9XR1KU3) already exists too and is
-  extended separately via infra/patch-cloudfront-distribution.js, since it
+  extended separately via private/infra/patch-cloudfront-distribution.js, since it
   predates this template and isn't CloudFormation-managed.
 
 Parameters:

@@ -5,7 +5,7 @@ This project contains a static front-end and a minimal Node/Express backend for 
 Features:
 - `front-end/pin-member-questionnaire.html` — survey UI
 - `front-end/index.html` — front-end landing page
-- `backend/index.js` — lightweight Express server that stores responses in a local SQLite DB by default
+- `private/backend/index.js` — lightweight Express server that stores responses in a local SQLite DB by default
 - Optional: upload survey JSON to an S3 bucket if `AWS_S3_BUCKET` is set
 
 ## Local development
@@ -76,7 +76,7 @@ You can create this table manually in the AWS Console, or deploy the included Cl
 
 ```bash
 aws cloudformation deploy \
-  --template-file infra/dynamodb-table.yml \
+  --template-file private/infra/dynamodb-table.yml \
   --stack-name pin-survey-db
 ```
 
@@ -84,7 +84,7 @@ When `AWS_DYNAMODB_TABLE` is set, the server writes each response to DynamoDB as
 
 ## Deploy backend to Lambda
 
-The backend can be deployed as a Lambda-backed HTTP API using the CloudFormation template in `infra/backend.yml`.
+The backend can be deployed as a Lambda-backed HTTP API using the CloudFormation template in `private/infra/backend.yml`.
 
 1. Build and package the Lambda code:
 
@@ -93,13 +93,13 @@ npm install
 npm run package:backend
 ```
 
-2. Upload `dist/backend.zip` to an S3 bucket.
+2. Upload `private/dist/backend.zip` to an S3 bucket.
 
 3. Deploy the backend stack:
 
 ```bash
 aws cloudformation deploy \
-  --template-file infra/backend.yml \
+  --template-file private/infra/backend.yml \
   --stack-name pin-backend \
   --parameter-overrides \
       DeploymentBucket=your-s3-bucket \

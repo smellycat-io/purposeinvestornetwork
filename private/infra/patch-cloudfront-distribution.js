@@ -10,7 +10,7 @@
  * anything live.
  *
  * Usage:
- *   node infra/patch-cloudfront-distribution.js <dist-config.json> <api-domain> > dist-config-updated.json
+ *   node private/infra/patch-cloudfront-distribution.js <dist-config.json> <api-domain> > dist-config-updated.json
  *
  * Where <api-domain> is just the hostname, e.g.
  *   abc123xyz.execute-api.us-east-1.amazonaws.com

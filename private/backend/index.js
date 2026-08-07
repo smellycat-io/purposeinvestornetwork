@@ -11,7 +11,7 @@ const { S3Client, PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/c
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const sanitizeHtml = require('sanitize-html');
-const content = require('./content');
+const content = require('./content.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;

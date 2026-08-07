@@ -3,11 +3,11 @@
   "name": "purpose-investor-network-backend",
   "version": "0.1.0",
   "private": true,
-  "main": "backend/index.js",
+  "main": "private/backend/index.js",
   "scripts": {
-    "start": "node backend/index.js",
+    "start": "node private/backend/index.js",
     "test": "jest",
-    "package:backend": "mkdir -p dist && rm -f dist/backend.zip && cd backend && zip -rq ../dist/backend.zip . ../package.json ../package-lock.json ../node_modules"
+    "package:backend": "mkdir -p private/dist && rm -f private/dist/backend.zip && cd private/backend && zip -rq ../dist/backend.zip . ../../package.json ../../package-lock.json ../../node_modules"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.379.0",
