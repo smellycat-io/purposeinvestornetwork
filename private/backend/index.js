@@ -1,5 +1,5 @@
 // IMPORTANT: Initialize Sentry before anything else
-require('./instrument.js');
+require('./sentry/instrument.js');
 
 const { captureMessage, setupExpressErrorHandler } = require('@sentry/aws-serverless');
 const express = require('express');
