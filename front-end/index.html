@@ -6,6 +6,7 @@
     <title>Purpose Investor Network | Stay Informed</title>
     <link rel="icon" href="/imgs/logos/favicon.png" />
     <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/nav.css" />
   </head>
 <body>
   <div class="site-topbar" id="site-topbar"></div>
@@ -40,18 +41,8 @@
     <!-- Sentry browser + analytics -->
     <script src="/env.js"></script>
     <script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
-    <script>
-      if (window.ENV && window.ENV.SENTRY_BROWSER_DSN) {
-        Sentry.init({
-          dsn: window.ENV.SENTRY_BROWSER_DSN,
-          environment: window.ENV.SENTRY_ENVIRONMENT,
-          release: window.ENV.SENTRY_RELEASE,
-          integrations: [Sentry.browserTracingIntegration()],
-          tracesSampleRate: window.ENV.SENTRY_TRACES_SAMPLE_RATE || 0
-        });
-        Sentry.setTag('page', 'index');
-      }
-    </script>
+    <script src="/sentry-browser.js"></script>
+    <script>initBrowserSentry('index');</script>
     <script async defer data-domain="yourdomain.com" src="https://plausible.io/js/plausible.js"></script>
     <script>
       (function() {

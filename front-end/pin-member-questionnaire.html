@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PIN Survey — Shaping What Comes Next</title>
 <link rel="icon" href="/imgs/logos/favicon.png">
+<link rel="stylesheet" href="/nav.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap');
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap');
@@ -32,79 +33,6 @@
     font-size: 16px;
     line-height: 1.6;
     min-height: 100vh;
-  }
-
-  /* UNIVERSAL TOP NAV */
-  .site-topbar {
-    background: #d70010;
-    width: 100%;
-  }
-
-  .site-topbar__inner {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
-
-  .site-topbar__logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
-    line-height: 1;
-  }
-
-  .site-topbar__logo img {
-    display: block;
-    height: 42px;
-    width: auto;
-    object-fit: contain;
-  }
-
-  .site-topbar__logo-fallback {
-    display: none;
-    align-items: center;
-    color: #ffffff;
-    font-family: 'Oswald', system-ui, sans-serif;
-    font-weight: 700;
-    font-size: 1.15rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-  }
-
-  .site-topbar__nav {
-    display: flex;
-    gap: 28px;
-  }
-
-  .site-topbar__nav a {
-    color: #ffffff;
-    text-decoration: none;
-    font-family: 'Oswald', system-ui, sans-serif;
-    font-weight: 600;
-    font-size: 0.95rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.85;
-    transition: opacity 0.15s ease;
-  }
-
-  .site-topbar__nav a:hover,
-  .site-topbar__nav a.active {
-    opacity: 1;
-    text-decoration: underline;
-    text-underline-offset: 4px;
-  }
-
-  @media (max-width: 560px) {
-    .site-topbar__inner { padding: 14px 16px; }
-    .site-topbar__nav { gap: 18px; }
   }
 
   /* HEADER */
@@ -560,18 +488,8 @@
 
     <script src="/env.js"></script>
     <script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
-    <script>
-      if (window.ENV && window.ENV.SENTRY_BROWSER_DSN) {
-        Sentry.init({
-          dsn: window.ENV.SENTRY_BROWSER_DSN,
-          environment: window.ENV.SENTRY_ENVIRONMENT,
-          release: window.ENV.SENTRY_RELEASE,
-          integrations: [Sentry.browserTracingIntegration()],
-          tracesSampleRate: window.ENV.SENTRY_TRACES_SAMPLE_RATE || 0
-        });
-        Sentry.setTag('page', 'survey');
-      }
-    </script>
+    <script src="/sentry-browser.js"></script>
+    <script>initBrowserSentry('survey');</script>
 
 <header>
   <div class="header-eyebrow">Purpose Investor Network</div>
