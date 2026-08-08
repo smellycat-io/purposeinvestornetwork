@@ -32,7 +32,8 @@
     <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
   </div>
 
-  <script src="/content-shared.js"></script>
+  <script src="/dom-utils.js"></script>
+  <script src="/component/card.js"></script>
   <script>
     (async function () {
       const listEl = document.getElementById('roundtables-list');
@@ -42,15 +43,13 @@
           listEl.innerHTML = '<p class="muted">No roundtables have been published yet. Check back soon.</p>';
           return;
         }
-        listEl.innerHTML = roundtables.map((r) => `
-          <a class="card-link" href="/roundtables/${encodeURIComponent(r.slug)}">
-            ${cardImageHtml(r.imageUrl)}
-            <div class="card-link__body">
-              <h3>${escapeHtml(r.name)}</h3>
-              <p>${escapeHtml(r.description)}</p>
-            </div>
-          </a>
-        `).join('');
+        listEl.innerHTML = roundtables.map((r) => linkCardHtml({
+          href: `/roundtables/${encodeURIComponent(r.slug)}`,
+          imageUrl: r.imageUrl,
+          title: r.name,
+          description: r.description,
+          headingLevel: 3,
+        })).join('');
       } catch (err) {
         listEl.innerHTML = '<p class="muted">Unable to load roundtables right now. Please try again later.</p>';
       }
