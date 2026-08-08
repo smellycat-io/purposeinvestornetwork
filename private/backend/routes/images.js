@@ -1,9 +1,9 @@
 const { Router } = require('express');
 const { PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
-const content = require('../content.js');
+const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
-const { s3Client, S3_BUCKET } = require('../shared/clients.js');
+const { s3Client, S3_BUCKET } = require('../shared/s3Client.js');
 
 const router = Router();
 

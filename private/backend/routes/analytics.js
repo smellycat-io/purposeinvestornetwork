@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureException } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
-const { saveAnalyticsEventToStore } = require('../shared/store.js');
+const { saveAnalyticsEventToStore } = require('../db/store.js');
 
 const router = Router();
 

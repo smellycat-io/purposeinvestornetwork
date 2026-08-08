@@ -4,8 +4,9 @@ const { PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
-const { s3Client, dynamoDbDocClient, S3_BUCKET, DYNAMODB_TABLE } = require('../shared/clients.js');
-const { store, saveSurveyResponseToStore } = require('../shared/store.js');
+const { s3Client, S3_BUCKET } = require('../shared/s3Client.js');
+const { dynamoDbDocClient, DYNAMODB_TABLE } = require('../db/dynamoClient.js');
+const { store, saveSurveyResponseToStore } = require('../db/store.js');
 
 const router = Router();
 

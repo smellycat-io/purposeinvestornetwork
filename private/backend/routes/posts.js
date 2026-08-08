@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const sanitizeHtml = require('sanitize-html');
-const content = require('../content.js');
+const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 
