@@ -207,7 +207,7 @@ h1, h2, h3, h4 {
   position: relative;
   display: inline-block;
   max-width: 620px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.80);
   padding: 32px 40px;
   border-radius: 20px;
 }
@@ -220,7 +220,7 @@ h1, h2, h3, h4 {
 
 .page-banner-text p {
   margin: 0;
-  color: #4a4c4f;
+  color: #313336;
   font-size: 1.05rem;
   max-width: 640px;
   line-height: 1.7;

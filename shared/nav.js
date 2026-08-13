@@ -4,6 +4,7 @@
 // the topbar markup.
 (function () {
   const NAV_LINKS = [
+    { href: '/about.html', label: 'About' },
     { href: '/roundtables', label: 'Roundtables' },
     { href: '/pin-member-questionnaire.html', label: 'Take Our Survey' },
   ];
