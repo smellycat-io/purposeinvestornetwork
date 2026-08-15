@@ -77,6 +77,10 @@ h1, h2, h3, h4 {
   max-width: 540px;
 }
 
+.statement-content {
+  padding: 44px;
+}
+
 .content {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -151,6 +155,72 @@ h1, h2, h3, h4 {
   box-shadow: 0 20px 34px rgba(0, 0, 0, 0.24);
 }
 
+/* A lighter-weight section that sits directly on the page background
+   (no card, no button) — for statements/context above the action cards. */
+.page-shell--tight-top {
+  padding-top: 12px;
+}
+
+.statement-content {
+  margin: 0 0 40px;
+}
+
+.statement-content h2 {
+  margin: 0 0 28px;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  color: var(--text);
+  letter-spacing: -0.03em;
+  text-align: center;
+}
+
+.statement-content__body {
+  overflow: hidden; /* clearfix so the section wraps the floated media's height */
+}
+
+.statement-content__media {
+  float: left;
+  width: 420px;
+  max-width: 45%;
+  margin: 4px 32px 20px 0;
+}
+
+.statement-content__video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 18px 34px rgba(17, 17, 17, 0.12);
+}
+
+.statement-content__video-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.statement-content__body p {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
+
+.statement-content__body p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .statement-content__media {
+    float: none;
+    width: 100%;
+    max-width: none;
+    margin: 0 0 20px;
+  }
+}
+
 .footer {
   margin-top: 36px;
   color: var(--muted);
@@ -160,6 +230,10 @@ h1, h2, h3, h4 {
 @media (max-width: 720px) {
   .page-shell {
     padding: 24px 16px;
+  }
+
+  .page-shell--tight-top {
+    padding-top: 8px;
   }
 
   .brand__inner {
