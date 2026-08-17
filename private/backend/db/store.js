@@ -1,7 +1,12 @@
-// Local JSON-file fallback store for survey responses and analytics events.
-// Survey responses are always written here in parallel with DynamoDB (see
-// routes/survey-responses.js) so admin reads still work if Dynamo isn't
-// configured; analytics events only ever live here.
+// Local JSON-file fallback store for survey responses, analytics events, and
+// newsletter subscribers. Survey responses are always written here in
+// parallel with DynamoDB (see routes/survey-responses.js) so admin reads
+// still work if Dynamo isn't configured; analytics events and subscribers
+// only ever live here.
+//
+// Note: in Lambda this file lives at /tmp, which is wiped on cold start —
+// subscriber signups aren't guaranteed durable in production unless this
+// gets backed by DynamoDB too (same tradeoff survey responses already made).
 const fs = require('fs');
 const { join } = require('path');
 
@@ -9,9 +14,11 @@ const dbFile =
   process.env.DB_FILE ||
   (process.env.LAMBDA_TASK_ROOT ? join('/tmp', 'survey-store.json') : join(__dirname, '..', 'survey.db'));
 
+const EMPTY_STORE = { surveyResponses: [], analyticsEvents: [], subscribers: [] };
+
 function loadStore() {
   if (dbFile === ':memory:') {
-    return { surveyResponses: [], analyticsEvents: [] };
+    return { ...EMPTY_STORE };
   }
 
   const storePath = dbFile;
@@ -21,17 +28,17 @@ function loadStore() {
   }
 
   if (!fs.existsSync(storePath)) {
-    const initialStore = { surveyResponses: [], analyticsEvents: [] };
+    const initialStore = { ...EMPTY_STORE };
     fs.writeFileSync(storePath, JSON.stringify(initialStore, null, 2));
     return initialStore;
   }
 
   try {
     const contents = fs.readFileSync(storePath, 'utf8');
-    return JSON.parse(contents);
+    return { ...EMPTY_STORE, ...JSON.parse(contents) };
   } catch (err) {
     console.error('Unable to read store file:', err);
-    return { surveyResponses: [], analyticsEvents: [] };
+    return { ...EMPTY_STORE };
   }
 }
 
@@ -58,4 +65,16 @@ function saveAnalyticsEventToStore(createdAt, event, properties, distinctId) {
   persistStore();
 }
 
-module.exports = { store, saveSurveyResponseToStore, saveAnalyticsEventToStore };
+function saveSubscriberToStore(createdAt, email) {
+  const id = createStoreId();
+  store.subscribers.push({ id, created_at: createdAt, email });
+  persistStore();
+  return id;
+}
+
+module.exports = {
+  store,
+  saveSurveyResponseToStore,
+  saveAnalyticsEventToStore,
+  saveSubscriberToStore,
+};
