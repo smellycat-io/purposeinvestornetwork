@@ -1,0 +1,94 @@
+const { Router } = require('express');
+const { join } = require('path');
+const sanitizeHtml = require('sanitize-html');
+const content = require('../db/content.js');
+const { requireAdmin } = require('../shared/auth.js');
+const { asyncRoute } = require('../shared/asyncRoute.js');
+const { filterVisible, canSeeFull } = require('../shared/access.js');
+
+const router = Router();
+
+function sanitizeRichText(html) {
+  return sanitizeHtml(html || '', {
+    allowedTags: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote', 'img'],
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt'],
+    },
+  });
+}
+
+// The flagship "Conference" series gets its own dedicated page — same
+// Events data, just pre-filtered to isConference:true.
+router.get('/conference', (req, res) => {
+  res.sendFile(join(__dirname, '..', 'pages/conference.html'));
+});
+
+router.get('/events', (req, res) => {
+  res.sendFile(join(__dirname, '..', 'pages/events.html'));
+});
+
+router.get('/events/:slug', (req, res) => {
+  res.sendFile(join(__dirname, '..', 'pages/event.html'));
+});
+
+router.get(
+  '/api/events',
+  asyncRoute(async (req, res) => {
+    let events = await content.listEvents();
+    if (req.query.conference === 'true') events = events.filter((e) => e.isConference);
+    res.json(filterVisible(events, req));
+  }, 'Unable to load events.')
+);
+
+router.get(
+  '/api/events/:slug',
+  asyncRoute(async (req, res) => {
+    const event = await content.getEventBySlug(req.params.slug);
+    if (!event) return res.status(404).json({ error: 'Not found.' });
+    if (event.memberOnly && !canSeeFull(event, req)) {
+      return res.status(404).json({ error: 'Not found.' });
+    }
+    res.json(event);
+  }, 'Unable to load event.')
+);
+
+router.get(
+  '/api/admin/events',
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    res.json(await content.listEvents());
+  }, 'Unable to load events.')
+);
+
+router.post(
+  '/api/admin/events',
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const payload = { ...req.body, description: sanitizeRichText(req.body.description) };
+    res.status(201).json(await content.createEvent(payload));
+  }, 'Unable to create event.')
+);
+
+router.put(
+  '/api/admin/events/:id',
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    const updates = { ...req.body };
+    if (updates.description) updates.description = sanitizeRichText(updates.description);
+    const event = await content.updateEvent(req.params.id, updates);
+    if (!event) return res.status(404).json({ error: 'Not found.' });
+    res.json(event);
+  }, 'Unable to update event.')
+);
+
+router.delete(
+  '/api/admin/events/:id',
+  requireAdmin,
+  asyncRoute(async (req, res) => {
+    await content.deleteEvent(req.params.id);
+    res.status(204).end();
+  }, 'Unable to delete event.')
+);
+
+module.exports = router;

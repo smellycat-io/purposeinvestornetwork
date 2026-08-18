@@ -16,8 +16,10 @@
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="survey" type="button">Survey Responses</button>
-    <button class="tab-btn" data-tab="posts" type="button">Blog Posts</button>
+    <button class="tab-btn" data-tab="posts" type="button">Posts &amp; Content</button>
     <button class="tab-btn" data-tab="content" type="button">Roundtables &amp; Initiatives</button>
+    <button class="tab-btn" data-tab="press" type="button">Press</button>
+    <button class="tab-btn" data-tab="investments-events" type="button">Investments &amp; Events</button>
   </nav>
 
   <section id="tab-survey" class="tab-panel active">
@@ -33,7 +35,7 @@
 
   <section id="tab-posts" class="tab-panel">
     <div class="panel-header">
-      <h2>Blog Posts &amp; Updates</h2>
+      <h2>Posts &amp; Content</h2>
       <button id="post-new-btn" class="btn btn-accent" type="button">New Post</button>
     </div>
 
@@ -55,12 +57,43 @@
           <select id="post-type">
             <option value="blog">Blog post</option>
             <option value="update">Initiative update</option>
+            <option value="education">Education article</option>
+            <option value="announcement">PIN Update</option>
+            <option value="book">Buy the Book module</option>
           </select>
         </label>
         <label class="field" id="post-initiative-field">
           <span>Initiative</span>
           <select id="post-initiative"></select>
         </label>
+      </div>
+      <div class="field" id="post-member-only-field">
+        <label class="inline-checkbox">
+          <input type="checkbox" id="post-member-only">
+          Members only (public sees the excerpt below; full article is gated)
+        </label>
+      </div>
+      <label class="field" id="post-excerpt-field">
+        <span>Excerpt (public preview shown for members-only articles)</span>
+        <textarea id="post-excerpt" rows="2"></textarea>
+      </label>
+      <div class="field-row" id="post-book-fields">
+        <label class="field">
+          <span>Purchase URL</span>
+          <input type="text" id="post-purchase-url" placeholder="https://...">
+        </label>
+        <label class="field">
+          <span>Price</span>
+          <input type="text" id="post-price" placeholder="$24.99">
+        </label>
+      </div>
+      <div class="field" id="post-image-field">
+        <span>Image (article hero / book cover)</span>
+        <input type="hidden" id="post-image-url">
+        <div class="image-field">
+          <img id="post-image-preview" class="image-preview" alt="">
+          <button type="button" class="btn-small" data-action="choose-image" data-field="post">Choose Image</button>
+        </div>
       </div>
       <label class="field">
         <span>Body</span>
@@ -149,6 +182,184 @@
         </form>
 
         <div id="initiatives-list" class="card-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-press" class="tab-panel">
+    <div class="panel-header">
+      <h2>Press</h2>
+      <button id="press-new-btn" class="btn btn-accent" type="button">New Press Mention</button>
+    </div>
+
+    <form id="press-form" class="card form-card hidden">
+      <input type="hidden" id="press-id">
+      <div class="field-row">
+        <label class="field">
+          <span>Title</span>
+          <input type="text" id="press-title" required>
+        </label>
+        <label class="field">
+          <span>Source</span>
+          <input type="text" id="press-source" placeholder="Forbes" required>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>Published date</span>
+          <input type="date" id="press-date">
+        </label>
+        <label class="field">
+          <span>External link</span>
+          <input type="text" id="press-url" placeholder="https://..." required>
+        </label>
+      </div>
+      <label class="field">
+        <span>Pull-quote / excerpt (optional)</span>
+        <textarea id="press-excerpt" rows="2"></textarea>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-accent">Save Press Mention</button>
+        <button type="button" id="press-cancel-btn" class="btn btn-ghost">Cancel</button>
+      </div>
+    </form>
+
+    <div id="press-list" class="card-list">
+      <p class="muted">Loading…</p>
+    </div>
+  </section>
+
+  <section id="tab-investments-events" class="tab-panel">
+    <div class="content-columns">
+      <div class="content-column">
+        <div class="panel-header">
+          <h2>Investments</h2>
+          <button id="investment-new-btn" class="btn btn-accent" type="button">New Investment</button>
+        </div>
+
+        <form id="investment-form" class="card form-card hidden">
+          <input type="hidden" id="investment-id">
+          <label class="field">
+            <span>Title</span>
+            <input type="text" id="investment-title" required>
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>Status</span>
+              <select id="investment-status">
+                <option value="open">Open</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Initiative</span>
+              <select id="investment-initiative"><option value="">None</option></select>
+            </label>
+          </div>
+          <div class="field">
+            <span>Roundtables</span>
+            <div id="investment-roundtable-checks" class="checkbox-list"></div>
+          </div>
+          <label class="field">
+            <span>Description</span>
+            <textarea id="investment-description" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Outcome summary (once completed)</span>
+            <textarea id="investment-outcome" rows="3"></textarea>
+          </label>
+          <div class="field">
+            <label class="inline-checkbox">
+              <input type="checkbox" id="investment-member-only">
+              Members only (hidden entirely from public list)
+            </label>
+          </div>
+          <div class="field">
+            <span>Image</span>
+            <input type="hidden" id="investment-image-url">
+            <div class="image-field">
+              <img id="investment-image-preview" class="image-preview" alt="">
+              <button type="button" class="btn-small" data-action="choose-image" data-field="investment">Choose Image</button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Save Investment</button>
+            <button type="button" id="investment-cancel-btn" class="btn btn-ghost">Cancel</button>
+          </div>
+        </form>
+
+        <div id="investments-list" class="card-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </div>
+
+      <div class="content-column">
+        <div class="panel-header">
+          <h2>Events</h2>
+          <button id="event-new-btn" class="btn btn-accent" type="button">New Event</button>
+        </div>
+
+        <form id="event-form" class="card form-card hidden">
+          <input type="hidden" id="event-id">
+          <label class="field">
+            <span>Title</span>
+            <input type="text" id="event-title" required>
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>Starts</span>
+              <input type="datetime-local" id="event-starts-at" required>
+            </label>
+            <label class="field">
+              <span>Ends (optional)</span>
+              <input type="datetime-local" id="event-ends-at">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Location</span>
+              <input type="text" id="event-location" placeholder="123 Main St, Salt Lake City">
+            </label>
+            <label class="field">
+              <span>Virtual link</span>
+              <input type="text" id="event-virtual-link" placeholder="https://...">
+            </label>
+          </div>
+          <label class="field">
+            <span>Description</span>
+            <textarea id="event-description" rows="3"></textarea>
+          </label>
+          <div class="field-row">
+            <div class="field">
+              <label class="inline-checkbox">
+                <input type="checkbox" id="event-member-only">
+                Members only
+              </label>
+            </div>
+            <div class="field">
+              <label class="inline-checkbox">
+                <input type="checkbox" id="event-is-conference">
+                Part of the Conference series
+              </label>
+            </div>
+          </div>
+          <div class="field">
+            <span>Image</span>
+            <input type="hidden" id="event-image-url">
+            <div class="image-field">
+              <img id="event-image-preview" class="image-preview" alt="">
+              <button type="button" class="btn-small" data-action="choose-image" data-field="event">Choose Image</button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Save Event</button>
+            <button type="button" id="event-cancel-btn" class="btn btn-ghost">Cancel</button>
+          </div>
+        </form>
+
+        <div id="events-list" class="card-list">
           <p class="muted">Loading…</p>
         </div>
       </div>

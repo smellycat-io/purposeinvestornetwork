@@ -283,7 +283,7 @@ h1, h2, h3, h4 {
   flex: 1 1 240px;
   padding: 14px 20px;
   border-radius: 999px;
-  border: none;
+  border: 1px solid #e6e2da;
   font-size: 1rem;
   font-family: inherit;
 }
@@ -443,6 +443,32 @@ h1, h2, h3, h4 {
   letter-spacing: -0.02em;
 }
 
+.benefits-list {
+  margin: 0;
+  padding-left: 1.4em;
+  color: var(--text);
+  font-size: 1.05rem;
+  line-height: 1.9;
+}
+
+.benefits-list li {
+  margin-bottom: 12px;
+}
+
+.benefits-list li:last-child {
+  margin-bottom: 0;
+}
+
+.join-cta {
+  text-align: center;
+  padding-top: 40px;
+  border-top: 1px solid #e6e2da;
+}
+
+.join-cta p {
+  max-width: none;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -530,4 +556,125 @@ h1, h2, h3, h4 {
 .update-body img {
   max-width: 100%;
   border-radius: 12px;
+}
+
+.update-card--link {
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.update-card--link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(17, 17, 17, 0.1);
+}
+
+/* --- Press --- */
+
+.press-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.press-item {
+  display: block;
+  background: #ffffff;
+  border: 1px solid #e6e2da;
+  border-radius: 20px;
+  padding: 28px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.press-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(17, 17, 17, 0.1);
+}
+
+.press-item__meta {
+  display: flex;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.press-item__source {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.press-item h3 {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+}
+
+.press-item p {
+  margin: 0;
+  color: var(--text);
+  font-style: italic;
+  line-height: 1.6;
+}
+
+/* --- Education: Buy the Book module --- */
+
+.book-module {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+}
+
+.book-module__cover {
+  width: 160px;
+  height: auto;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.book-module__body h3 {
+  margin: 0 0 12px;
+  color: #ffffff;
+  font-size: 1.6rem;
+}
+
+.book-module__body p {
+  margin: 0 0 20px;
+  color: #d8d8d8;
+  line-height: 1.6;
+}
+
+/* --- Education article detail / paywall --- */
+
+.article-hero {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+
+.paywall-notice {
+  background: var(--background);
+  border: 1px solid #e6e2da;
+  border-radius: 16px;
+  padding: 24px 28px;
+}
+
+.paywall-notice p {
+  margin: 0 0 8px;
+}
+
+.paywall-notice p:last-child {
+  margin-bottom: 0;
 }

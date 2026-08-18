@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Education | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div class="page-banner" style="background-image: url('/imgs/stock/ideas.jpg');">
+    <div class="page-banner__inner">
+      <div class="page-banner-text">
+        <h2>Education</h2>
+        <p>Articles on impact investing, philanthropy, and mentoring the next generation.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <main>
+      <div id="book-module"></div>
+
+      <div id="education-list" class="card-grid">
+        <p class="muted">Loading&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script src="/component/card.js"></script>
+  <script>
+    (async function () {
+      const bookEl = document.getElementById('book-module');
+      const listEl = document.getElementById('education-list');
+
+      try {
+        const book = await fetchJson('/api/book');
+        if (book) {
+          bookEl.innerHTML = `
+            <section class="book-module">
+              ${book.imageUrl ? `<img class="book-module__cover" src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)} cover" />` : ''}
+              <div class="book-module__body">
+                <p class="section__eyebrow">Buy the Book</p>
+                <h3>${escapeHtml(book.title)}</h3>
+                <p>${escapeHtml(book.excerpt || '')}</p>
+                ${book.purchaseUrl ? `<a class="cta-button" href="${escapeHtml(book.purchaseUrl)}" target="_blank" rel="noopener">Buy Now${book.price ? ` &mdash; ${escapeHtml(book.price)}` : ''}</a>` : ''}
+              </div>
+            </section>
+          `;
+        }
+      } catch (err) {
+        // Non-critical — the book module just won't render.
+      }
+
+      try {
+        const posts = await fetchJson('/api/education');
+        if (!posts.length) {
+          listEl.innerHTML = '<p class="muted">No articles have been published yet. Check back soon.</p>';
+          return;
+        }
+        listEl.innerHTML = posts.map((post) => linkCardHtml({
+          href: `/education/${encodeURIComponent(post.slug)}`,
+          imageUrl: post.imageUrl,
+          title: post.memberOnly ? `${post.title} (Members Only)` : post.title,
+          description: post.excerpt || '',
+          headingLevel: 3,
+        })).join('');
+      } catch (err) {
+        listEl.innerHTML = '<p class="muted">Unable to load articles right now. Please try again later.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>

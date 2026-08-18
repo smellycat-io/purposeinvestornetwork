@@ -1,11 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Purpose Investor Network content tables — Roundtables, Initiatives, Posts,
-  and Images. Posts is a single unified table for both blog posts and
-  initiative updates (distinguished by a "type" attribute), since they're
-  the same shape: timestamped, rich-text, shown in a feed. Images is a
-  library of uploaded image metadata (S3 key/URL + upload info) that admins
-  can browse and reuse across roundtables and initiatives.
+  Images, Press, Investments, and Events. Posts is a single unified table for
+  blog posts, initiative updates, education articles, PIN announcements, and
+  the "Buy the Book" module (distinguished by a "type" attribute), since
+  they're the same shape: timestamped, rich-text, shown in a feed. Images is
+  a library of uploaded image metadata (S3 key/URL + upload info) that
+  admins can browse and reuse. Investments and Events get their own tables
+  since their fields (deal status/outcome, dates) don't fit the Posts shape.
 
 Resources:
   RoundtablesTable:
@@ -56,6 +58,42 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
+  PressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-press
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  InvestmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-investments
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-events
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
 Outputs:
   RoundtablesTableName:
     Value: !Ref RoundtablesTable
@@ -65,3 +103,9 @@ Outputs:
     Value: !Ref PostsTable
   ImagesTableName:
     Value: !Ref ImagesTable
+  PressTableName:
+    Value: !Ref PressTable
+  InvestmentsTableName:
+    Value: !Ref InvestmentsTable
+  EventsTableName:
+    Value: !Ref EventsTable

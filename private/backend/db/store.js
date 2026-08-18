@@ -65,9 +65,9 @@ function saveAnalyticsEventToStore(createdAt, event, properties, distinctId) {
   persistStore();
 }
 
-function saveSubscriberToStore(createdAt, email) {
+function saveSubscriberToStore(createdAt, email, source) {
   const id = createStoreId();
-  store.subscribers.push({ id, created_at: createdAt, email });
+  store.subscribers.push({ id, created_at: createdAt, email, source: source || 'newsletter' });
   persistStore();
   return id;
 }

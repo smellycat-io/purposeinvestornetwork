@@ -104,6 +104,9 @@ jobs:
           AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives
           AWS_POSTS_TABLE: purpose-investor-network-posts
           AWS_IMAGES_TABLE: purpose-investor-network-images
+          AWS_PRESS_TABLE: purpose-investor-network-press
+          AWS_INVESTMENTS_TABLE: purpose-investor-network-investments
+          AWS_EVENTS_TABLE: purpose-investor-network-events
         run: |
           python - <<'PY'
           import json
@@ -133,7 +136,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -165,6 +168,9 @@ jobs:
               'AWS_INITIATIVES_TABLE': env_values.get('AWS_INITIATIVES_TABLE', current.get('AWS_INITIATIVES_TABLE', '')),
               'AWS_POSTS_TABLE': env_values.get('AWS_POSTS_TABLE', current.get('AWS_POSTS_TABLE', '')),
               'AWS_IMAGES_TABLE': env_values.get('AWS_IMAGES_TABLE', current.get('AWS_IMAGES_TABLE', '')),
+              'AWS_PRESS_TABLE': env_values.get('AWS_PRESS_TABLE', current.get('AWS_PRESS_TABLE', '')),
+              'AWS_INVESTMENTS_TABLE': env_values.get('AWS_INVESTMENTS_TABLE', current.get('AWS_INVESTMENTS_TABLE', '')),
+              'AWS_EVENTS_TABLE': env_values.get('AWS_EVENTS_TABLE', current.get('AWS_EVENTS_TABLE', '')),
           })
 
           try:
@@ -207,6 +213,9 @@ jobs:
           AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives
           AWS_POSTS_TABLE: purpose-investor-network-posts
           AWS_IMAGES_TABLE: purpose-investor-network-images
+          AWS_PRESS_TABLE: purpose-investor-network-press
+          AWS_INVESTMENTS_TABLE: purpose-investor-network-investments
+          AWS_EVENTS_TABLE: purpose-investor-network-events
         run: |
           python - <<'PY'
           import json
@@ -232,6 +241,9 @@ jobs:
               'AWS_INITIATIVES_TABLE': os.getenv('AWS_INITIATIVES_TABLE', ''),
               'AWS_POSTS_TABLE': os.getenv('AWS_POSTS_TABLE', ''),
               'AWS_IMAGES_TABLE': os.getenv('AWS_IMAGES_TABLE', ''),
+              'AWS_PRESS_TABLE': os.getenv('AWS_PRESS_TABLE', ''),
+              'AWS_INVESTMENTS_TABLE': os.getenv('AWS_INVESTMENTS_TABLE', ''),
+              'AWS_EVENTS_TABLE': os.getenv('AWS_EVENTS_TABLE', ''),
           }
 
           try:
@@ -302,6 +314,9 @@ jobs:
               'purpose-investor-network-initiatives',
               'purpose-investor-network-posts',
               'purpose-investor-network-images',
+              'purpose-investor-network-press',
+              'purpose-investor-network-investments',
+              'purpose-investor-network-events',
           ]
           table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
 

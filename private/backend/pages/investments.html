@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investments | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div class="page-banner" style="background-image: url('/imgs/stock/jump.jpg');">
+    <div class="page-banner__inner">
+      <div class="page-banner-text">
+        <h2>Investments</h2>
+        <p>A showcase of completed and open investments sourced through our Roundtables and Initiatives.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <main>
+      <div id="investments-list" class="card-grid">
+        <p class="muted">Loading&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script src="/component/card.js"></script>
+  <script>
+    (async function () {
+      const listEl = document.getElementById('investments-list');
+      try {
+        const items = await fetchJson('/api/investments');
+        if (!items.length) {
+          listEl.innerHTML = '<p class="muted">No investments have been published yet. Check back soon.</p>';
+          return;
+        }
+        listEl.innerHTML = items.map((inv) => linkCardHtml({
+          href: `/investments/${encodeURIComponent(inv.slug)}`,
+          imageUrl: inv.imageUrl,
+          title: `${inv.status === 'completed' ? 'Completed' : 'Open'} — ${inv.title}`,
+          description: inv.description,
+          headingLevel: 3,
+        })).join('');
+      } catch (err) {
+        listEl.innerHTML = '<p class="muted">Unable to load investments right now. Please try again later.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>

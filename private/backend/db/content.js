@@ -12,6 +12,11 @@ const ROUNDTABLES_TABLE = process.env.AWS_ROUNDTABLES_TABLE || null;
 const INITIATIVES_TABLE = process.env.AWS_INITIATIVES_TABLE || null;
 const POSTS_TABLE = process.env.AWS_POSTS_TABLE || null;
 const IMAGES_TABLE = process.env.AWS_IMAGES_TABLE || null;
+const PRESS_TABLE = process.env.AWS_PRESS_TABLE || null;
+const INVESTMENTS_TABLE = process.env.AWS_INVESTMENTS_TABLE || null;
+const EVENTS_TABLE = process.env.AWS_EVENTS_TABLE || null;
+
+const POST_TYPES = ['blog', 'update', 'education', 'announcement', 'book'];
 
 let docClient = null;
 function getDocClient() {
@@ -149,8 +154,8 @@ async function getPostBySlug(slug) {
   return items.find((p) => p.slug === slug) || null;
 }
 
-async function createPost({ title, body, type, initiativeId, author }) {
-  const postType = type === 'update' ? 'update' : 'blog';
+async function createPost({ title, body, type, initiativeId, author, memberOnly, excerpt, imageUrl, purchaseUrl, price }) {
+  const postType = POST_TYPES.includes(type) ? type : 'blog';
   const item = {
     id: makeId(),
     title,
@@ -160,6 +165,15 @@ async function createPost({ title, body, type, initiativeId, author }) {
     initiativeId: postType === 'update' ? initiativeId || null : null,
     author: author || null,
     publishedAt: new Date().toISOString(),
+    // Only 'education' posts ever set memberOnly:true; every other type
+    // stays public. Kept on every row (rather than type-specific) so gating
+    // helpers (shared/access.js) never need a type-specific branch.
+    memberOnly: postType === 'education' ? !!memberOnly : false,
+    excerpt: excerpt || null,
+    imageUrl: imageUrl || null,
+    // 'book' type only — the "Buy the Book" module.
+    purchaseUrl: postType === 'book' ? purchaseUrl || null : null,
+    price: postType === 'book' ? price || null : null,
   };
   await getDocClient().send(new PutCommand({ TableName: POSTS_TABLE, Item: item }));
   return item;
@@ -176,6 +190,135 @@ async function updatePost(id, updates) {
 
 async function deletePost(id) {
   await getDocClient().send(new DeleteCommand({ TableName: POSTS_TABLE, Key: { id } }));
+}
+
+// --- Press (third-party mentions — always public, no memberOnly gating,
+// but the field is still present on every row so shared/access.js never
+// needs a type-specific branch) ---
+
+async function listPress() {
+  const items = await scanAll(PRESS_TABLE);
+  return items.sort((a, b) => new Date(b.publishedDate) - new Date(a.publishedDate));
+}
+
+async function createPress({ title, source, publishedDate, externalUrl, excerpt }) {
+  const item = {
+    id: makeId(),
+    title,
+    source,
+    publishedDate: publishedDate || new Date().toISOString(),
+    externalUrl,
+    excerpt: excerpt || null,
+    memberOnly: false,
+    createdAt: new Date().toISOString(),
+  };
+  await getDocClient().send(new PutCommand({ TableName: PRESS_TABLE, Item: item }));
+  return item;
+}
+
+async function updatePress(id, updates) {
+  const items = await scanAll(PRESS_TABLE);
+  const existing = items.find((p) => p.id === id);
+  if (!existing) return null;
+  const item = { ...existing, ...updates, id, memberOnly: false, updatedAt: new Date().toISOString() };
+  await getDocClient().send(new PutCommand({ TableName: PRESS_TABLE, Item: item }));
+  return item;
+}
+
+async function deletePress(id) {
+  await getDocClient().send(new DeleteCommand({ TableName: PRESS_TABLE, Key: { id } }));
+}
+
+// --- Investments (portfolio/showcase — v1 is display-only, not a funding
+// mechanism. memberOnly:true rows are hidden entirely from public reads,
+// same binary-hide convention as Events.) ---
+
+async function listInvestments() {
+  const items = await scanAll(INVESTMENTS_TABLE);
+  return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+async function getInvestmentBySlug(slug) {
+  const items = await scanAll(INVESTMENTS_TABLE);
+  return items.find((i) => i.slug === slug) || null;
+}
+
+async function createInvestment({ title, initiativeId, roundtableIds, status, description, outcomeSummary, imageUrl, memberOnly }) {
+  const item = {
+    id: makeId(),
+    title,
+    slug: `${slugify(title)}-${Date.now().toString(36)}`,
+    initiativeId: initiativeId || null,
+    roundtableIds: Array.isArray(roundtableIds) ? roundtableIds : [],
+    status: status === 'completed' ? 'completed' : 'open',
+    description: description || '',
+    outcomeSummary: outcomeSummary || null,
+    imageUrl: imageUrl || null,
+    memberOnly: !!memberOnly,
+    createdAt: new Date().toISOString(),
+  };
+  await getDocClient().send(new PutCommand({ TableName: INVESTMENTS_TABLE, Item: item }));
+  return item;
+}
+
+async function updateInvestment(id, updates) {
+  const items = await scanAll(INVESTMENTS_TABLE);
+  const existing = items.find((i) => i.id === id);
+  if (!existing) return null;
+  const item = { ...existing, ...updates, id, updatedAt: new Date().toISOString() };
+  if (updates.title) item.slug = slugify(updates.title);
+  await getDocClient().send(new PutCommand({ TableName: INVESTMENTS_TABLE, Item: item }));
+  return item;
+}
+
+async function deleteInvestment(id) {
+  await getDocClient().send(new DeleteCommand({ TableName: INVESTMENTS_TABLE, Key: { id } }));
+}
+
+// --- Events (calendar — no RSVP/capacity in v1, just listing info.
+// isConference flags the flagship "Conference" series for its own page.) ---
+
+async function listEvents() {
+  const items = await scanAll(EVENTS_TABLE);
+  return items.sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+}
+
+async function getEventBySlug(slug) {
+  const items = await scanAll(EVENTS_TABLE);
+  return items.find((e) => e.slug === slug) || null;
+}
+
+async function createEvent({ title, startsAt, endsAt, location, virtualLink, description, memberOnly, isConference, imageUrl }) {
+  const item = {
+    id: makeId(),
+    title,
+    slug: `${slugify(title)}-${Date.now().toString(36)}`,
+    startsAt,
+    endsAt: endsAt || null,
+    location: location || null,
+    virtualLink: virtualLink || null,
+    description: description || '',
+    memberOnly: !!memberOnly,
+    isConference: !!isConference,
+    imageUrl: imageUrl || null,
+    createdAt: new Date().toISOString(),
+  };
+  await getDocClient().send(new PutCommand({ TableName: EVENTS_TABLE, Item: item }));
+  return item;
+}
+
+async function updateEvent(id, updates) {
+  const items = await scanAll(EVENTS_TABLE);
+  const existing = items.find((e) => e.id === id);
+  if (!existing) return null;
+  const item = { ...existing, ...updates, id, updatedAt: new Date().toISOString() };
+  if (updates.title) item.slug = slugify(updates.title);
+  await getDocClient().send(new PutCommand({ TableName: EVENTS_TABLE, Item: item }));
+  return item;
+}
+
+async function deleteEvent(id) {
+  await getDocClient().send(new DeleteCommand({ TableName: EVENTS_TABLE, Key: { id } }));
 }
 
 // --- Images (a reusable library of uploaded images, so admins can browse
@@ -217,6 +360,20 @@ module.exports = {
   createPost,
   updatePost,
   deletePost,
+  listPress,
+  createPress,
+  updatePress,
+  deletePress,
+  listInvestments,
+  getInvestmentBySlug,
+  createInvestment,
+  updateInvestment,
+  deleteInvestment,
+  listEvents,
+  getEventBySlug,
+  createEvent,
+  updateEvent,
+  deleteEvent,
   listImages,
   createImage,
 };

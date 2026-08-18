@@ -5,10 +5,21 @@
     roundtables: [],
     initiatives: [],
     posts: [],
+    press: [],
+    investments: [],
+    events: [],
     editingPostId: null,
     editingRoundtableId: null,
     editingInitiativeId: null,
+    editingPressId: null,
+    editingInvestmentId: null,
+    editingEventId: null,
   };
+
+  const POST_TYPES_WITH_MEMBER_ONLY = ['education'];
+  const POST_TYPES_WITH_EXCERPT = ['education', 'book'];
+  const POST_TYPES_WITH_IMAGE = ['education', 'book', 'blog'];
+  const POST_TYPES_WITH_BOOK_FIELDS = ['book'];
 
   let quill = null;
 
@@ -183,6 +194,8 @@
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         if (btn.dataset.tab === 'posts') loadPostsTab();
         if (btn.dataset.tab === 'content') loadContentTab();
+        if (btn.dataset.tab === 'press') loadPressTab();
+        if (btn.dataset.tab === 'investments-events') loadInvestmentsEventsTab();
       });
     });
   }
@@ -238,9 +251,17 @@
     ).join('');
   }
 
-  function togglePostInitiativeField() {
+  function updatePostFieldVisibility() {
     const type = document.getElementById('post-type').value;
     document.getElementById('post-initiative-field').style.display = type === 'update' ? 'flex' : 'none';
+    document.getElementById('post-member-only-field').style.display =
+      POST_TYPES_WITH_MEMBER_ONLY.includes(type) ? 'block' : 'none';
+    document.getElementById('post-excerpt-field').style.display =
+      POST_TYPES_WITH_EXCERPT.includes(type) ? 'flex' : 'none';
+    document.getElementById('post-image-field').style.display =
+      POST_TYPES_WITH_IMAGE.includes(type) ? 'block' : 'none';
+    document.getElementById('post-book-fields').style.display =
+      POST_TYPES_WITH_BOOK_FIELDS.includes(type) ? 'flex' : 'none';
   }
 
   function resetPostForm() {
@@ -249,7 +270,12 @@
     document.getElementById('post-title').value = '';
     document.getElementById('post-author').value = '';
     document.getElementById('post-type').value = 'blog';
-    togglePostInitiativeField();
+    document.getElementById('post-member-only').checked = false;
+    document.getElementById('post-excerpt').value = '';
+    document.getElementById('post-purchase-url').value = '';
+    document.getElementById('post-price').value = '';
+    setImagePreview('post', null);
+    updatePostFieldVisibility();
     getQuill().setContents([]);
     document.getElementById('post-form').classList.add('hidden');
   }
@@ -263,7 +289,12 @@
       document.getElementById('post-title').value = post.title;
       document.getElementById('post-author').value = post.author || '';
       document.getElementById('post-type').value = post.type;
-      togglePostInitiativeField();
+      document.getElementById('post-member-only').checked = !!post.memberOnly;
+      document.getElementById('post-excerpt').value = post.excerpt || '';
+      document.getElementById('post-purchase-url').value = post.purchaseUrl || '';
+      document.getElementById('post-price').value = post.price || '';
+      setImagePreview('post', post.imageUrl || null);
+      updatePostFieldVisibility();
       if (post.type === 'update' && post.initiativeId) {
         document.getElementById('post-initiative').value = post.initiativeId;
       }
@@ -274,10 +305,23 @@
       document.getElementById('post-title').value = '';
       document.getElementById('post-author').value = '';
       document.getElementById('post-type').value = 'blog';
-      togglePostInitiativeField();
+      document.getElementById('post-member-only').checked = false;
+      document.getElementById('post-excerpt').value = '';
+      document.getElementById('post-purchase-url').value = '';
+      document.getElementById('post-price').value = '';
+      setImagePreview('post', null);
+      updatePostFieldVisibility();
       quill.setContents([]);
     }
   }
+
+  const POST_TYPE_LABELS = {
+    blog: 'Blog',
+    update: 'Update',
+    education: 'Education',
+    announcement: 'PIN Update',
+    book: 'Book',
+  };
 
   function renderPosts() {
     const list = document.getElementById('posts-list');
@@ -293,7 +337,8 @@
       <div class="list-item" data-id="${escapeHtml(post.id)}">
         <div class="list-item-body">
           <h3>
-            <span class="badge">${post.type === 'update' ? 'Update' : 'Blog'}</span>
+            <span class="badge">${escapeHtml(POST_TYPE_LABELS[post.type] || post.type)}</span>
+            ${post.memberOnly ? '<span class="badge">Members only</span>' : ''}
             ${escapeHtml(post.title)}
           </h3>
           <p>${post.type === 'update' ? escapeHtml(initiativeName(post.initiativeId)) + ' · ' : ''}${escapeHtml(post.author || 'Unknown author')} · ${escapeHtml(post.publishedAt)}</p>
@@ -332,6 +377,11 @@
       type,
       initiativeId: type === 'update' ? document.getElementById('post-initiative').value : null,
       body: getQuill().root.innerHTML,
+      memberOnly: document.getElementById('post-member-only').checked,
+      excerpt: document.getElementById('post-excerpt').value.trim() || null,
+      imageUrl: document.getElementById('post-image-url').value || null,
+      purchaseUrl: document.getElementById('post-purchase-url').value.trim() || null,
+      price: document.getElementById('post-price').value.trim() || null,
     };
     try {
       if (state.editingPostId) {
@@ -362,7 +412,7 @@
   function initPostsTab() {
     document.getElementById('post-new-btn').addEventListener('click', () => openPostForm(null));
     document.getElementById('post-cancel-btn').addEventListener('click', resetPostForm);
-    document.getElementById('post-type').addEventListener('change', togglePostInitiativeField);
+    document.getElementById('post-type').addEventListener('change', updatePostFieldVisibility);
     document.getElementById('post-form').addEventListener('submit', savePost);
     document.getElementById('posts-list').addEventListener('click', (event) => {
       const btn = event.target.closest('button[data-action]');
@@ -593,10 +643,394 @@
     });
   }
 
+  // --- Press ---
+
+  function resetPressForm() {
+    state.editingPressId = null;
+    document.getElementById('press-id').value = '';
+    document.getElementById('press-title').value = '';
+    document.getElementById('press-source').value = '';
+    document.getElementById('press-date').value = '';
+    document.getElementById('press-url').value = '';
+    document.getElementById('press-excerpt').value = '';
+    document.getElementById('press-form').classList.add('hidden');
+  }
+
+  function openPressForm(press) {
+    document.getElementById('press-form').classList.remove('hidden');
+    state.editingPressId = press ? press.id : null;
+    document.getElementById('press-id').value = press ? press.id : '';
+    document.getElementById('press-title').value = press ? press.title : '';
+    document.getElementById('press-source').value = press ? press.source : '';
+    document.getElementById('press-date').value = press && press.publishedDate ? press.publishedDate.slice(0, 10) : '';
+    document.getElementById('press-url').value = press ? press.externalUrl : '';
+    document.getElementById('press-excerpt').value = press ? press.excerpt || '' : '';
+  }
+
+  function renderPress() {
+    const list = document.getElementById('press-list');
+    if (!state.press.length) {
+      list.innerHTML = '<p class="muted">No press mentions yet.</p>';
+      return;
+    }
+    list.innerHTML = state.press.map((p) => `
+      <div class="list-item" data-id="${escapeHtml(p.id)}">
+        <div class="list-item-body">
+          <h3>${escapeHtml(p.title)}</h3>
+          <p>${escapeHtml(p.source)} &middot; ${escapeHtml((p.publishedDate || '').slice(0, 10))}</p>
+          <p><a href="${escapeHtml(p.externalUrl)}" target="_blank" rel="noopener">${escapeHtml(p.externalUrl)}</a></p>
+        </div>
+        <div class="list-item-actions">
+          <button class="btn-small" data-action="edit-press" type="button">Edit</button>
+          <button class="btn-small danger" data-action="delete-press" type="button">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function loadPressTab() {
+    try {
+      state.press = await api('/api/admin/press');
+      renderPress();
+    } catch (err) {
+      document.getElementById('press-list').innerHTML = '<p class="muted">Failed to load press mentions.</p>';
+      showToast(err.message, true);
+    }
+  }
+
+  async function savePress(event) {
+    event.preventDefault();
+    const dateValue = document.getElementById('press-date').value;
+    const payload = {
+      title: document.getElementById('press-title').value.trim(),
+      source: document.getElementById('press-source').value.trim(),
+      publishedDate: dateValue ? new Date(dateValue).toISOString() : new Date().toISOString(),
+      externalUrl: document.getElementById('press-url').value.trim(),
+      excerpt: document.getElementById('press-excerpt').value.trim() || null,
+    };
+    try {
+      if (state.editingPressId) {
+        await api('/api/admin/press/' + state.editingPressId, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('Press mention updated.');
+      } else {
+        await api('/api/admin/press', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Press mention created.');
+      }
+      resetPressForm();
+      await loadPressTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function deletePress(id) {
+    if (!confirm('Delete this press mention?')) return;
+    try {
+      await api('/api/admin/press/' + id, { method: 'DELETE' });
+      showToast('Press mention deleted.');
+      await loadPressTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function initPressTab() {
+    document.getElementById('press-new-btn').addEventListener('click', () => openPressForm(null));
+    document.getElementById('press-cancel-btn').addEventListener('click', resetPressForm);
+    document.getElementById('press-form').addEventListener('submit', savePress);
+    document.getElementById('press-list').addEventListener('click', (event) => {
+      const btn = event.target.closest('button[data-action]');
+      if (!btn) return;
+      const id = btn.closest('.list-item').dataset.id;
+      if (btn.dataset.action === 'edit-press') {
+        openPressForm(state.press.find((p) => p.id === id));
+      } else if (btn.dataset.action === 'delete-press') {
+        deletePress(id);
+      }
+    });
+  }
+
+  // --- Investments & Events ---
+
+  function toDatetimeLocalValue(iso) {
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function fromDatetimeLocalValue(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function populateInvestmentInitiativeSelect() {
+    const select = document.getElementById('investment-initiative');
+    select.innerHTML = '<option value="">None</option>' + state.initiatives.map((i) =>
+      `<option value="${escapeHtml(i.id)}">${escapeHtml(i.title)}</option>`
+    ).join('');
+  }
+
+  function renderInvestmentRoundtableChecks(selectedIds) {
+    const container = document.getElementById('investment-roundtable-checks');
+    const selected = new Set(selectedIds || []);
+    if (!state.roundtables.length) {
+      container.innerHTML = '<span class="muted">No roundtables yet.</span>';
+      return;
+    }
+    container.innerHTML = state.roundtables.map((rt) => `
+      <label>
+        <input type="checkbox" value="${escapeHtml(rt.id)}" ${selected.has(rt.id) ? 'checked' : ''}>
+        ${escapeHtml(rt.name)}
+      </label>
+    `).join('');
+  }
+
+  function resetInvestmentForm() {
+    state.editingInvestmentId = null;
+    document.getElementById('investment-id').value = '';
+    document.getElementById('investment-title').value = '';
+    document.getElementById('investment-status').value = 'open';
+    document.getElementById('investment-initiative').value = '';
+    renderInvestmentRoundtableChecks([]);
+    document.getElementById('investment-description').value = '';
+    document.getElementById('investment-outcome').value = '';
+    document.getElementById('investment-member-only').checked = false;
+    setImagePreview('investment', null);
+    document.getElementById('investment-form').classList.add('hidden');
+  }
+
+  function openInvestmentForm(investment) {
+    document.getElementById('investment-form').classList.remove('hidden');
+    state.editingInvestmentId = investment ? investment.id : null;
+    document.getElementById('investment-id').value = investment ? investment.id : '';
+    document.getElementById('investment-title').value = investment ? investment.title : '';
+    document.getElementById('investment-status').value = investment ? investment.status : 'open';
+    document.getElementById('investment-initiative').value = investment ? investment.initiativeId || '' : '';
+    renderInvestmentRoundtableChecks(investment ? investment.roundtableIds : []);
+    document.getElementById('investment-description').value = investment ? stripHtml(investment.description || '') : '';
+    document.getElementById('investment-outcome').value = investment ? stripHtml(investment.outcomeSummary || '') : '';
+    document.getElementById('investment-member-only').checked = investment ? !!investment.memberOnly : false;
+    setImagePreview('investment', investment ? investment.imageUrl : null);
+  }
+
+  function renderInvestments() {
+    const list = document.getElementById('investments-list');
+    if (!state.investments.length) {
+      list.innerHTML = '<p class="muted">No investments yet.</p>';
+      return;
+    }
+    list.innerHTML = state.investments.map((inv) => `
+      <div class="list-item" data-id="${escapeHtml(inv.id)}">
+        ${inv.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(inv.imageUrl)}" alt="">` : ''}
+        <div class="list-item-body">
+          <h3>
+            <span class="badge">${inv.status === 'completed' ? 'Completed' : 'Open'}</span>
+            ${inv.memberOnly ? '<span class="badge">Members only</span>' : ''}
+            ${escapeHtml(inv.title)}
+          </h3>
+          <p>${escapeHtml(inv.description || '')}</p>
+        </div>
+        <div class="list-item-actions">
+          <button class="btn-small" data-action="edit-investment" type="button">Edit</button>
+          <button class="btn-small danger" data-action="delete-investment" type="button">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function saveInvestment(event) {
+    event.preventDefault();
+    const roundtableIds = Array.from(document.querySelectorAll('#investment-roundtable-checks input:checked')).map((el) => el.value);
+    const payload = {
+      title: document.getElementById('investment-title').value.trim(),
+      status: document.getElementById('investment-status').value,
+      initiativeId: document.getElementById('investment-initiative').value || null,
+      roundtableIds,
+      description: document.getElementById('investment-description').value.trim(),
+      outcomeSummary: document.getElementById('investment-outcome').value.trim() || null,
+      memberOnly: document.getElementById('investment-member-only').checked,
+      imageUrl: document.getElementById('investment-image-url').value || null,
+    };
+    try {
+      if (state.editingInvestmentId) {
+        await api('/api/admin/investments/' + state.editingInvestmentId, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('Investment updated.');
+      } else {
+        await api('/api/admin/investments', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Investment created.');
+      }
+      resetInvestmentForm();
+      await loadInvestmentsEventsTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function deleteInvestment(id) {
+    if (!confirm('Delete this investment?')) return;
+    try {
+      await api('/api/admin/investments/' + id, { method: 'DELETE' });
+      showToast('Investment deleted.');
+      await loadInvestmentsEventsTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function resetEventForm() {
+    state.editingEventId = null;
+    document.getElementById('event-id').value = '';
+    document.getElementById('event-title').value = '';
+    document.getElementById('event-starts-at').value = '';
+    document.getElementById('event-ends-at').value = '';
+    document.getElementById('event-location').value = '';
+    document.getElementById('event-virtual-link').value = '';
+    document.getElementById('event-description').value = '';
+    document.getElementById('event-member-only').checked = false;
+    document.getElementById('event-is-conference').checked = false;
+    setImagePreview('event', null);
+    document.getElementById('event-form').classList.add('hidden');
+  }
+
+  function openEventForm(evt) {
+    document.getElementById('event-form').classList.remove('hidden');
+    state.editingEventId = evt ? evt.id : null;
+    document.getElementById('event-id').value = evt ? evt.id : '';
+    document.getElementById('event-title').value = evt ? evt.title : '';
+    document.getElementById('event-starts-at').value = evt ? toDatetimeLocalValue(evt.startsAt) : '';
+    document.getElementById('event-ends-at').value = evt ? toDatetimeLocalValue(evt.endsAt) : '';
+    document.getElementById('event-location').value = evt ? evt.location || '' : '';
+    document.getElementById('event-virtual-link').value = evt ? evt.virtualLink || '' : '';
+    document.getElementById('event-description').value = evt ? stripHtml(evt.description || '') : '';
+    document.getElementById('event-member-only').checked = evt ? !!evt.memberOnly : false;
+    document.getElementById('event-is-conference').checked = evt ? !!evt.isConference : false;
+    setImagePreview('event', evt ? evt.imageUrl : null);
+  }
+
+  function renderEvents() {
+    const list = document.getElementById('events-list');
+    if (!state.events.length) {
+      list.innerHTML = '<p class="muted">No events yet.</p>';
+      return;
+    }
+    list.innerHTML = state.events.map((evt) => `
+      <div class="list-item" data-id="${escapeHtml(evt.id)}">
+        ${evt.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(evt.imageUrl)}" alt="">` : ''}
+        <div class="list-item-body">
+          <h3>
+            ${evt.isConference ? '<span class="badge">Conference</span>' : ''}
+            ${evt.memberOnly ? '<span class="badge">Members only</span>' : ''}
+            ${escapeHtml(evt.title)}
+          </h3>
+          <p>${escapeHtml(new Date(evt.startsAt).toLocaleString())}${evt.location ? ' &middot; ' + escapeHtml(evt.location) : ''}</p>
+          <p>${escapeHtml(stripHtml(evt.description || '').slice(0, 140))}</p>
+        </div>
+        <div class="list-item-actions">
+          <button class="btn-small" data-action="edit-event" type="button">Edit</button>
+          <button class="btn-small danger" data-action="delete-event" type="button">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function saveEvent(event) {
+    event.preventDefault();
+    const payload = {
+      title: document.getElementById('event-title').value.trim(),
+      startsAt: fromDatetimeLocalValue(document.getElementById('event-starts-at').value),
+      endsAt: fromDatetimeLocalValue(document.getElementById('event-ends-at').value),
+      location: document.getElementById('event-location').value.trim() || null,
+      virtualLink: document.getElementById('event-virtual-link').value.trim() || null,
+      description: document.getElementById('event-description').value.trim(),
+      memberOnly: document.getElementById('event-member-only').checked,
+      isConference: document.getElementById('event-is-conference').checked,
+      imageUrl: document.getElementById('event-image-url').value || null,
+    };
+    try {
+      if (state.editingEventId) {
+        await api('/api/admin/events/' + state.editingEventId, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('Event updated.');
+      } else {
+        await api('/api/admin/events', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Event created.');
+      }
+      resetEventForm();
+      await loadInvestmentsEventsTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function deleteEvent(id) {
+    if (!confirm('Delete this event?')) return;
+    try {
+      await api('/api/admin/events/' + id, { method: 'DELETE' });
+      showToast('Event deleted.');
+      await loadInvestmentsEventsTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function loadInvestmentsEventsTab() {
+    try {
+      const [investments, events, roundtables, initiatives] = await Promise.all([
+        api('/api/admin/investments'),
+        api('/api/admin/events'),
+        state.roundtables.length ? Promise.resolve(state.roundtables) : api('/api/roundtables'),
+        state.initiatives.length ? Promise.resolve(state.initiatives) : api('/api/admin/initiatives'),
+      ]);
+      state.investments = investments;
+      state.events = events;
+      state.roundtables = roundtables;
+      state.initiatives = initiatives;
+      populateInvestmentInitiativeSelect();
+      renderInvestments();
+      renderEvents();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function initInvestmentsEventsTab() {
+    document.getElementById('investment-new-btn').addEventListener('click', () => openInvestmentForm(null));
+    document.getElementById('investment-cancel-btn').addEventListener('click', resetInvestmentForm);
+    document.getElementById('investment-form').addEventListener('submit', saveInvestment);
+    document.getElementById('investments-list').addEventListener('click', (event) => {
+      const btn = event.target.closest('button[data-action]');
+      if (!btn) return;
+      const id = btn.closest('.list-item').dataset.id;
+      if (btn.dataset.action === 'edit-investment') {
+        openInvestmentForm(state.investments.find((i) => i.id === id));
+      } else if (btn.dataset.action === 'delete-investment') {
+        deleteInvestment(id);
+      }
+    });
+
+    document.getElementById('event-new-btn').addEventListener('click', () => openEventForm(null));
+    document.getElementById('event-cancel-btn').addEventListener('click', resetEventForm);
+    document.getElementById('event-form').addEventListener('submit', saveEvent);
+    document.getElementById('events-list').addEventListener('click', (event) => {
+      const btn = event.target.closest('button[data-action]');
+      if (!btn) return;
+      const id = btn.closest('.list-item').dataset.id;
+      if (btn.dataset.action === 'edit-event') {
+        openEventForm(state.events.find((e) => e.id === id));
+      } else if (btn.dataset.action === 'delete-event') {
+        deleteEvent(id);
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initPostsTab();
     initContentTab();
+    initPressTab();
+    initInvestmentsEventsTab();
     loadSurvey();
   });
 })();

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Become a Member | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderFrontendNav();</script>
+
+  <div class="page-banner" style="background-image: url('/imgs/stock/impact%20roundtable.jpg');">
+    <div class="page-banner__inner">
+      <div class="page-banner-text">
+        <h2>Become a Member</h2>
+        <p>Join a national community of purpose-driven investors using Impact Investing to mentor the Next Generation.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <main>
+      <section class="content-section">
+        <h3>Member Benefits</h3>
+        <ul class="benefits-list">
+          <li>Curated, vetted impact investment opportunities sourced through our Roundtables and Initiatives</li>
+          <li>Join Roundtables around causes you care about &mdash; Education, Poverty, Health, the Arts, and more</li>
+          <li>Mentor the next generation of purpose-driven investors, or be mentored yourself</li>
+          <li>Attend the annual PIN Conference and member events</li>
+          <li>Access educational content, workshops, and expert-led sessions</li>
+          <li>Track your investments and engagement through a private member dashboard</li>
+        </ul>
+      </section>
+
+      <section class="content-section">
+        <h3>Pricing</h3>
+        <p>We&rsquo;re still finalizing membership tiers and pricing. Join the waitlist below and we&rsquo;ll let you know as soon as enrollment opens &mdash; including early access for founding members.</p>
+      </section>
+
+      <section class="content-section join-waitlist">
+        <h3>Join the Waitlist</h3>
+        <p>Membership isn&rsquo;t open yet &mdash; add your email and we&rsquo;ll reach out as soon as it is.</p>
+        <form id="waitlist-form" class="subscribe-form" novalidate>
+          <label for="waitlist-email" class="visually-hidden">Email address</label>
+          <input id="waitlist-email" name="email" type="email" placeholder="you@example.com" required />
+          <button type="submit" class="cta-button">Join the Waitlist</button>
+        </form>
+        <p class="subscribe-message" id="waitlist-message" role="status" hidden></p>
+      </section>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/env.js"></script>
+  <script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+  <script src="/sentry/sentry-browser.js"></script>
+  <script>initBrowserSentry('become-a-member');</script>
+  <script async defer data-domain="yourdomain.com" src="https://plausible.io/js/plausible.js"></script>
+  <script>
+    (function () {
+      const form = document.getElementById('waitlist-form');
+      const message = document.getElementById('waitlist-message');
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const email = document.getElementById('waitlist-email').value.trim();
+        message.hidden = false;
+        message.classList.remove('subscribe-message--error');
+        message.textContent = 'Signing you up…';
+        try {
+          const res = await fetch('/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, source: 'membership-waitlist' }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Something went wrong.');
+          }
+          message.textContent = 'Thanks — you’re on the waitlist!';
+          form.reset();
+        } catch (err) {
+          message.classList.add('subscribe-message--error');
+          message.textContent = err.message || 'Unable to sign up right now. Please try again later.';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

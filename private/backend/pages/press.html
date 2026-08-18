@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Press | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div class="page-banner" style="background-image: url('/imgs/stock/speaker.jpg');">
+    <div class="page-banner__inner">
+      <div class="page-banner-text">
+        <h2>Press</h2>
+        <p>Where the Purpose Investor Network has been featured.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-shell">
+    <main>
+      <div id="press-list" class="press-list">
+        <p class="muted">Loading&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script>
+    (async function () {
+      const listEl = document.getElementById('press-list');
+      try {
+        const items = await fetchJson('/api/press');
+        if (!items.length) {
+          listEl.innerHTML = '<p class="muted">No press mentions yet. Check back soon.</p>';
+          return;
+        }
+        listEl.innerHTML = items.map((p) => `
+          <a class="press-item" href="${escapeHtml(p.externalUrl)}" target="_blank" rel="noopener">
+            <div class="press-item__meta">
+              <span class="press-item__source">${escapeHtml(p.source)}</span>
+              <span>${escapeHtml(formatDate(p.publishedDate))}</span>
+            </div>
+            <h3>${escapeHtml(p.title)}</h3>
+            ${p.excerpt ? `<p>&ldquo;${escapeHtml(p.excerpt)}&rdquo;</p>` : ''}
+          </a>
+        `).join('');
+      } catch (err) {
+        listEl.innerHTML = '<p class="muted">Unable to load press mentions right now. Please try again later.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>

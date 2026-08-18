@@ -5,19 +5,55 @@
 (function () {
   const NAV_LINKS = [
     { href: '/about.html', label: 'About' },
-    { href: '/roundtables', label: 'Roundtables' },
+    {
+      href: '/roundtables',
+      label: 'Roundtables',
+      children: [
+        { href: '/investments', label: 'Investments' },
+        { href: '/events', label: 'Events' },
+      ],
+    },
+    { href: '/education', label: 'Education' },
+    {
+      href: '/updates',
+      label: 'Updates',
+      children: [{ href: '/press', label: 'Press' }],
+    },
     { href: '/pin-member-questionnaire.html', label: 'Take Our Survey' },
+    { href: '/become-a-member.html', label: 'Join', cta: true },
   ];
+
+  // Prefix-matched sections (their own detail/sub-pages share the parent link's active state).
+  const PREFIX_MATCHED = ['/roundtables', '/investments', '/events', '/education', '/updates'];
 
   function isActive(href) {
     const path = window.location.pathname;
-    return href === '/roundtables' ? path.startsWith('/roundtables') : path === href;
+    if (href === '/events' && path === '/conference') return true;
+    return PREFIX_MATCHED.includes(href) ? path.startsWith(href) : path === href;
+  }
+
+  function linkHtml(link, forceActive) {
+    const active = forceActive || isActive(link.href);
+    const classes = [link.cta ? 'site-topbar__nav-cta' : null, active ? 'active' : null].filter(Boolean);
+    const classAttr = classes.length ? ` class="${classes.join(' ')}"` : '';
+    return `<a href="${link.href}"${classAttr}>${link.label}</a>`;
+  }
+
+  function navItemHtml(link) {
+    if (!link.children || !link.children.length) return linkHtml(link);
+
+    const hasActiveChild = link.children.some((child) => isActive(child.href));
+    return `
+        <div class="site-topbar__nav-item${hasActiveChild ? ' active' : ''}">
+          ${linkHtml(link, hasActiveChild)}
+          <div class="site-topbar__dropdown">
+            ${link.children.map((child) => linkHtml(child)).join('\n            ')}
+          </div>
+        </div>`;
   }
 
   function siteTopbarHtml() {
-    const links = NAV_LINKS.map(
-      (link) => `<a href="${link.href}"${isActive(link.href) ? ' class="active"' : ''}>${link.label}</a>`
-    ).join('\n        ');
+    const links = NAV_LINKS.map(navItemHtml).join('\n        ');
 
     return `
     <div class="site-topbar__inner">

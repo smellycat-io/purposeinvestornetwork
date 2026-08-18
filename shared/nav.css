@@ -44,7 +44,9 @@
 
 .site-topbar__nav {
   display: flex;
-  gap: 28px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
 }
 
 .site-topbar__nav a {
@@ -64,6 +66,75 @@
   opacity: 1;
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+.site-topbar__nav a.site-topbar__nav-cta {
+  background: #ffffff;
+  color: #111111;
+  opacity: 1;
+  padding: 8px 20px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.site-topbar__nav a.site-topbar__nav-cta:hover,
+.site-topbar__nav a.site-topbar__nav-cta.active {
+  background: #111111;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.site-topbar__nav-item {
+  position: relative;
+}
+
+/* Bridges the visual gap above the dropdown so the cursor stays "inside"
+   the hoverable area while moving from the link down into the dropdown —
+   otherwise :hover ends the instant the cursor crosses the gap. */
+.site-topbar__nav-item::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 14px;
+}
+
+.site-topbar__dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 14px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  min-width: 170px;
+  z-index: 20;
+}
+
+.site-topbar__nav-item:hover .site-topbar__dropdown,
+.site-topbar__nav-item:focus-within .site-topbar__dropdown {
+  display: block;
+}
+
+.site-topbar__nav .site-topbar__dropdown a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #111111;
+  opacity: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.9rem;
+}
+
+.site-topbar__nav .site-topbar__dropdown a:hover,
+.site-topbar__nav .site-topbar__dropdown a.active {
+  background: #f5f2ee;
+  text-decoration: none;
 }
 
 @media (max-width: 560px) {

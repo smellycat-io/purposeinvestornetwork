@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div id="banner-slot"></div>
+
+  <div class="page-shell">
+    <main>
+      <p class="breadcrumb"><a href="/events">&larr; All events</a></p>
+
+      <div id="event-content">
+        <p class="muted">Loading event&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script src="/component/banner.js"></script>
+  <script>
+    (async function () {
+      const contentEl = document.getElementById('event-content');
+      const slug = lastPathSegment();
+
+      try {
+        const evt = await fetchJson(`/api/events/${encodeURIComponent(slug)}`);
+        document.title = `${evt.title} | Purpose Investor Network`;
+
+        const { bannerHtml, headingHtml } = pageBannerHtml({
+          imageUrl: evt.imageUrl,
+          title: evt.title,
+          description: formatDate(evt.startsAt),
+        });
+        document.getElementById('banner-slot').innerHTML = bannerHtml;
+
+        const whenLine = evt.endsAt
+          ? `${formatDate(evt.startsAt)} &ndash; ${formatDate(evt.endsAt)}`
+          : formatDate(evt.startsAt);
+        const whereLine = evt.virtualLink
+          ? `<a href="${escapeHtml(evt.virtualLink)}" target="_blank" rel="noopener">Join virtually</a>`
+          : escapeHtml(evt.location || '');
+
+        contentEl.innerHTML = `
+          ${headingHtml}
+          <p class="muted">${whenLine}${whereLine ? ' &bull; ' + whereLine : ''}</p>
+          <section class="content-section">
+            <div class="update-body">${evt.description || ''}</div>
+          </section>
+        `;
+      } catch (err) {
+        if (err.status === 404) {
+          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that event. It may have been renamed, removed, or is members-only.</p>';
+        } else {
+          contentEl.innerHTML = '<p class="muted">Unable to load this event right now. Please try again later.</p>';
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

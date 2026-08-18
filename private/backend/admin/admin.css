@@ -185,6 +185,8 @@ body {
 .field span { font-weight: 600; font-size: 13px; }
 
 .field input[type="text"],
+.field input[type="date"],
+.field input[type="datetime-local"],
 .field select,
 .field textarea {
   padding: 10px;
@@ -192,6 +194,14 @@ body {
   border-radius: 8px;
   font-family: inherit;
   font-size: 14px;
+}
+
+.inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 #post-editor { background: #fff; }

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Article | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div class="page-shell">
+    <main>
+      <p class="breadcrumb"><a href="/education">&larr; All articles</a></p>
+
+      <div id="article-content">
+        <p class="muted">Loading article&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script>
+    (async function () {
+      const contentEl = document.getElementById('article-content');
+      const slug = lastPathSegment();
+
+      try {
+        const post = await fetchJson(`/api/education/${encodeURIComponent(slug)}`);
+        document.title = `${post.title} | Purpose Investor Network`;
+
+        const metaLine = `${post.author ? escapeHtml(post.author) + ' &bull; ' : ''}${escapeHtml(formatDate(post.publishedAt))}`;
+
+        const bodyHtml = post.memberLocked
+          ? `
+            <p>${escapeHtml(post.excerpt || '')}</p>
+            <div class="paywall-notice">
+              <p><strong>This article is available to PIN members.</strong></p>
+              <p class="muted">Log in as a member to read the full article.</p>
+            </div>
+          `
+          : `<div class="update-body">${post.body || ''}</div>`;
+
+        contentEl.innerHTML = `
+          <div class="page-heading">
+            ${post.imageUrl ? `<img class="article-hero" src="${escapeHtml(post.imageUrl)}" alt="" />` : ''}
+            <h2>${escapeHtml(post.title)}</h2>
+            <p class="muted">${metaLine}</p>
+          </div>
+          <section class="content-section">
+            ${bodyHtml}
+          </section>
+        `;
+      } catch (err) {
+        if (err.status === 404) {
+          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that article. It may have been renamed or removed.</p>';
+        } else {
+          contentEl.innerHTML = '<p class="muted">Unable to load this article right now. Please try again later.</p>';
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investment | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div id="banner-slot"></div>
+
+  <div class="page-shell">
+    <main>
+      <p class="breadcrumb"><a href="/investments">&larr; All investments</a></p>
+
+      <div id="investment-content">
+        <p class="muted">Loading investment&hellip;</p>
+      </div>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script src="/component/banner.js"></script>
+  <script>
+    (async function () {
+      const contentEl = document.getElementById('investment-content');
+      const slug = lastPathSegment();
+
+      try {
+        const inv = await fetchJson(`/api/investments/${encodeURIComponent(slug)}`);
+        document.title = `${inv.title} | Purpose Investor Network`;
+
+        const { bannerHtml, headingHtml } = pageBannerHtml({
+          imageUrl: inv.imageUrl,
+          title: inv.title,
+          description: inv.description,
+        });
+        document.getElementById('banner-slot').innerHTML = bannerHtml;
+
+        const outcomeHtml = inv.outcomeSummary
+          ? `<section class="content-section"><h3>Outcome</h3><div class="update-body">${inv.outcomeSummary}</div></section>`
+          : '';
+
+        contentEl.innerHTML = `
+          ${headingHtml}
+          <p class="muted">Status: ${inv.status === 'completed' ? 'Completed' : 'Open'}</p>
+          <section class="content-section">
+            <div class="update-body">${inv.description || ''}</div>
+          </section>
+          ${outcomeHtml}
+        `;
+      } catch (err) {
+        if (err.status === 404) {
+          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that investment. It may have been renamed, removed, or is members-only.</p>';
+        } else {
+          contentEl.innerHTML = '<p class="muted">Unable to load this investment right now. Please try again later.</p>';
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
