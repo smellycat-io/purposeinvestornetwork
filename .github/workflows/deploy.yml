@@ -107,6 +107,7 @@ jobs:
           AWS_PRESS_TABLE: purpose-investor-network-press
           AWS_INVESTMENTS_TABLE: purpose-investor-network-investments
           AWS_EVENTS_TABLE: purpose-investor-network-events
+          AWS_SETTINGS_TABLE: purpose-investor-network-settings
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
         run: |
@@ -138,7 +139,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'AWS_SETTINGS_TABLE', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -173,6 +174,7 @@ jobs:
               'AWS_PRESS_TABLE': env_values.get('AWS_PRESS_TABLE', current.get('AWS_PRESS_TABLE', '')),
               'AWS_INVESTMENTS_TABLE': env_values.get('AWS_INVESTMENTS_TABLE', current.get('AWS_INVESTMENTS_TABLE', '')),
               'AWS_EVENTS_TABLE': env_values.get('AWS_EVENTS_TABLE', current.get('AWS_EVENTS_TABLE', '')),
+              'AWS_SETTINGS_TABLE': env_values.get('AWS_SETTINGS_TABLE', current.get('AWS_SETTINGS_TABLE', '')),
               'NOTIFY_EMAIL': env_values.get('NOTIFY_EMAIL', current.get('NOTIFY_EMAIL', '')),
               'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
           })
@@ -220,6 +222,7 @@ jobs:
           AWS_PRESS_TABLE: purpose-investor-network-press
           AWS_INVESTMENTS_TABLE: purpose-investor-network-investments
           AWS_EVENTS_TABLE: purpose-investor-network-events
+          AWS_SETTINGS_TABLE: purpose-investor-network-settings
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
         run: |
@@ -250,6 +253,7 @@ jobs:
               'AWS_PRESS_TABLE': os.getenv('AWS_PRESS_TABLE', ''),
               'AWS_INVESTMENTS_TABLE': os.getenv('AWS_INVESTMENTS_TABLE', ''),
               'AWS_EVENTS_TABLE': os.getenv('AWS_EVENTS_TABLE', ''),
+              'AWS_SETTINGS_TABLE': os.getenv('AWS_SETTINGS_TABLE', ''),
               'NOTIFY_EMAIL': os.getenv('NOTIFY_EMAIL', ''),
               'SES_FROM_EMAIL': os.getenv('SES_FROM_EMAIL', ''),
           }
@@ -325,6 +329,7 @@ jobs:
               'purpose-investor-network-press',
               'purpose-investor-network-investments',
               'purpose-investor-network-events',
+              'purpose-investor-network-settings',
           ]
           table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
 

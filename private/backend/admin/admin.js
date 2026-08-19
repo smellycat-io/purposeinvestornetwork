@@ -196,6 +196,7 @@
         if (btn.dataset.tab === 'content') loadContentTab();
         if (btn.dataset.tab === 'press') loadPressTab();
         if (btn.dataset.tab === 'investments-events') loadInvestmentsEventsTab();
+        if (btn.dataset.tab === 'settings') loadSettingsTab();
       });
     });
   }
@@ -1025,12 +1026,61 @@
     });
   }
 
+  // --- Settings ---
+
+  async function loadSettingsTab() {
+    try {
+      const settings = await api('/api/admin/settings');
+      document.getElementById('settings-notify-email').value = settings.notifyEmail || '';
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function saveNotifyEmail(event) {
+    event.preventDefault();
+    const email = document.getElementById('settings-notify-email').value.trim();
+    try {
+      await api('/api/admin/settings/notify-email', { method: 'PUT', body: JSON.stringify({ email }) });
+      showToast('Notification email updated.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function savePassword(event) {
+    event.preventDefault();
+    const currentPassword = document.getElementById('settings-current-password').value;
+    const newPassword = document.getElementById('settings-new-password').value;
+    const confirmPassword = document.getElementById('settings-confirm-password').value;
+    if (newPassword !== confirmPassword) {
+      showToast('New password and confirmation do not match.', true);
+      return;
+    }
+    try {
+      await api('/api/admin/settings/password', {
+        method: 'PUT',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      showToast('Password updated.');
+      document.getElementById('password-form').reset();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function initSettingsTab() {
+    document.getElementById('notify-email-form').addEventListener('submit', saveNotifyEmail);
+    document.getElementById('password-form').addEventListener('submit', savePassword);
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initPostsTab();
     initContentTab();
     initPressTab();
     initInvestmentsEventsTab();
+    initSettingsTab();
     loadSurvey();
   });
 })();

@@ -187,6 +187,8 @@ body {
 .field input[type="text"],
 .field input[type="date"],
 .field input[type="datetime-local"],
+.field input[type="email"],
+.field input[type="password"],
 .field select,
 .field textarea {
   padding: 10px;

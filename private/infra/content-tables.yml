@@ -94,6 +94,23 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
+  # Single-row app settings (admin-editable notification email + password
+  # hash) — deliberately DynamoDB, not the local JSON store, since that store
+  # lives at /tmp in Lambda and gets wiped on cold start. A subscriber
+  # signup getting lost to that is a shrug; the admin's password silently
+  # reverting to an old value is a lockout waiting to happen.
+  SettingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: purpose-investor-network-settings
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
 Outputs:
   RoundtablesTableName:
     Value: !Ref RoundtablesTable
@@ -109,3 +126,5 @@ Outputs:
     Value: !Ref InvestmentsTable
   EventsTableName:
     Value: !Ref EventsTable
+  SettingsTableName:
+    Value: !Ref SettingsTable

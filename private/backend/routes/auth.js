@@ -1,5 +1,7 @@
 const { Router } = require('express');
+const { captureException } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
+const { checkAdminPassword } = require('../db/settings.js');
 
 const router = Router();
 
@@ -25,11 +27,16 @@ router.get('/login', (req, res) => {
   `);
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  if (username === config.ADMIN_USER && password === config.ADMIN_PASS) {
-    req.session.loggedIn = true;
-    return res.redirect('/admin');
+  try {
+    if (username === config.ADMIN_USER && (await checkAdminPassword(password))) {
+      req.session.loggedIn = true;
+      return res.redirect('/admin');
+    }
+  } catch (err) {
+    captureException(err);
+    return res.send('<p>Something went wrong checking your credentials. <a href="/login">Try again</a>.</p>');
   }
 
   return res.send('<p>Invalid credentials. <a href="/login">Try again</a>.</p>');

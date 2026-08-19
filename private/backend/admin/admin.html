@@ -20,6 +20,7 @@
     <button class="tab-btn" data-tab="content" type="button">Roundtables &amp; Initiatives</button>
     <button class="tab-btn" data-tab="press" type="button">Press</button>
     <button class="tab-btn" data-tab="investments-events" type="button">Investments &amp; Events</button>
+    <button class="tab-btn" data-tab="settings" type="button">Settings</button>
   </nav>
 
   <section id="tab-survey" class="tab-panel active">
@@ -362,6 +363,50 @@
         <div id="events-list" class="card-list">
           <p class="muted">Loading…</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tab-panel">
+    <div class="content-columns">
+      <div class="content-column">
+        <div class="panel-header">
+          <h2>Notification Email</h2>
+        </div>
+        <p class="muted">Survey submissions and waitlist signups are emailed here.</p>
+        <form id="notify-email-form" class="card form-card">
+          <label class="field">
+            <span>Email address</span>
+            <input type="email" id="settings-notify-email" required>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Save Email</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="content-column">
+        <div class="panel-header">
+          <h2>Change Password</h2>
+        </div>
+        <p class="muted">Updates the admin login password immediately.</p>
+        <form id="password-form" class="card form-card">
+          <label class="field">
+            <span>Current password</span>
+            <input type="password" id="settings-current-password" autocomplete="current-password" required>
+          </label>
+          <label class="field">
+            <span>New password</span>
+            <input type="password" id="settings-new-password" autocomplete="new-password" minlength="8" required>
+          </label>
+          <label class="field">
+            <span>Confirm new password</span>
+            <input type="password" id="settings-confirm-password" autocomplete="new-password" minlength="8" required>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-accent">Update Password</button>
+          </div>
+        </form>
       </div>
     </div>
   </section>
