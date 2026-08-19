@@ -53,11 +53,26 @@ function createStoreId() {
   return Date.now() + Math.floor(Math.random() * 1000000);
 }
 
-function saveSurveyResponseToStore(createdAt, email, payload) {
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+// `recordId` is the string id also used as the DynamoDB item id (see
+// routes/survey-responses.js) — stored alongside the local numeric `id` so
+// the free-month linking below has one stable identifier to reference
+// regardless of which persistence path (local store vs Dynamo) is active.
+function saveSurveyResponseToStore(createdAt, email, payload, recordId) {
   const id = createStoreId();
-  store.surveyResponses.push({ id, created_at: createdAt, email, payload });
+  store.surveyResponses.push({ id, record_id: recordId || null, created_at: createdAt, email, payload });
   persistStore();
   return id;
+}
+
+function findSurveyResponseIdByEmail(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const match = store.surveyResponses.find((r) => normalizeEmail(r.email) === normalized);
+  return match ? (match.record_id || match.id) : null;
 }
 
 function saveAnalyticsEventToStore(createdAt, event, properties, distinctId) {
@@ -65,11 +80,46 @@ function saveAnalyticsEventToStore(createdAt, event, properties, distinctId) {
   persistStore();
 }
 
-function saveSubscriberToStore(createdAt, email, source) {
+// Free-month tracking: a waitlist subscriber (source:'membership-waitlist')
+// who also completes the survey earns a free month. The two actions can
+// happen in either order, so both save paths check for the other:
+//   - saveSubscriberToStore checks for an existing survey response by email.
+//   - linkSurveyToWaitlistSubscriber (called after a survey save) checks for
+//     an existing waitlist subscriber by email.
+function saveSubscriberToStore(createdAt, email, source, details) {
   const id = createStoreId();
-  store.subscribers.push({ id, created_at: createdAt, email, source: source || 'newsletter' });
+  const extra = details || {};
+  const resolvedSource = source || 'newsletter';
+  const existingSurveyId = resolvedSource === 'membership-waitlist' ? findSurveyResponseIdByEmail(email) : null;
+  store.subscribers.push({
+    id,
+    created_at: createdAt,
+    email,
+    source: resolvedSource,
+    name: extra.name || null,
+    phone: extra.phone || null,
+    address: extra.address || null,
+    tier: extra.tier || null,
+    surveyResponseId: existingSurveyId,
+    freeMonthEarned: !!existingSurveyId,
+  });
   persistStore();
   return id;
+}
+
+function linkSurveyToWaitlistSubscriber(email, surveyResponseId) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  let linked = false;
+  store.subscribers.forEach((sub) => {
+    if (normalizeEmail(sub.email) === normalized && sub.source === 'membership-waitlist' && !sub.surveyResponseId) {
+      sub.surveyResponseId = surveyResponseId;
+      sub.freeMonthEarned = true;
+      linked = true;
+    }
+  });
+  if (linked) persistStore();
+  return linked;
 }
 
 module.exports = {
@@ -77,4 +127,5 @@ module.exports = {
   saveSurveyResponseToStore,
   saveAnalyticsEventToStore,
   saveSubscriberToStore,
+  linkSurveyToWaitlistSubscriber,
 };

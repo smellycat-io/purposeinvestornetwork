@@ -107,6 +107,8 @@ jobs:
           AWS_PRESS_TABLE: purpose-investor-network-press
           AWS_INVESTMENTS_TABLE: purpose-investor-network-investments
           AWS_EVENTS_TABLE: purpose-investor-network-events
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
         run: |
           python - <<'PY'
           import json
@@ -136,7 +138,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -171,6 +173,8 @@ jobs:
               'AWS_PRESS_TABLE': env_values.get('AWS_PRESS_TABLE', current.get('AWS_PRESS_TABLE', '')),
               'AWS_INVESTMENTS_TABLE': env_values.get('AWS_INVESTMENTS_TABLE', current.get('AWS_INVESTMENTS_TABLE', '')),
               'AWS_EVENTS_TABLE': env_values.get('AWS_EVENTS_TABLE', current.get('AWS_EVENTS_TABLE', '')),
+              'NOTIFY_EMAIL': env_values.get('NOTIFY_EMAIL', current.get('NOTIFY_EMAIL', '')),
+              'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
           })
 
           try:
@@ -216,6 +220,8 @@ jobs:
           AWS_PRESS_TABLE: purpose-investor-network-press
           AWS_INVESTMENTS_TABLE: purpose-investor-network-investments
           AWS_EVENTS_TABLE: purpose-investor-network-events
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
         run: |
           python - <<'PY'
           import json
@@ -244,6 +250,8 @@ jobs:
               'AWS_PRESS_TABLE': os.getenv('AWS_PRESS_TABLE', ''),
               'AWS_INVESTMENTS_TABLE': os.getenv('AWS_INVESTMENTS_TABLE', ''),
               'AWS_EVENTS_TABLE': os.getenv('AWS_EVENTS_TABLE', ''),
+              'NOTIFY_EMAIL': os.getenv('NOTIFY_EMAIL', ''),
+              'SES_FROM_EMAIL': os.getenv('SES_FROM_EMAIL', ''),
           }
 
           try:
@@ -343,6 +351,37 @@ jobs:
               '--policy-document', json.dumps(policy_document),
           ])
           print('DynamoDB access policy applied to Lambda role.')
+          PY
+
+      - name: Ensure Lambda role has SES access
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role'
+
+          # Notification emails are sent from a single fixed sender identity
+          # (SES_FROM_EMAIL), so this doesn't need a resource ARN scoped per
+          # email — "*" plus SendEmail/SendRawEmail is the standard minimal
+          # grant for "send mail as our one verified identity."
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [{
+                  'Effect': 'Allow',
+                  'Action': ['ses:SendEmail', 'ses:SendRawEmail'],
+                  'Resource': '*',
+              }],
+          }
+
+          # put-role-policy is idempotent — creates or overwrites the named inline policy
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-ses-notifications',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('SES access policy applied to Lambda role.')
           PY
 
       - name: Update Lambda Function Code

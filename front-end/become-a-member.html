@@ -38,18 +38,76 @@
 
       <section class="content-section">
         <h3>Pricing</h3>
-        <p>We&rsquo;re still finalizing membership tiers and pricing. Join the waitlist below and we&rsquo;ll let you know as soon as enrollment opens &mdash; including early access for founding members.</p>
+        <p>Membership isn&rsquo;t open yet, but here&rsquo;s what we&rsquo;re planning. Join the waitlist below and we&rsquo;ll let you know as soon as enrollment opens &mdash; including early access for founding members.</p>
+        <div class="pricing-grid">
+          <div class="pricing-card">
+            <h4>Curious</h4>
+            <p class="pricing-card__price">$8.99<span>/mo</span></p>
+            <p>Basic educational material.</p>
+            <button type="button" class="cta-button cta-button--outline cta-button--small pricing-card__select" data-tier="Curious">Select</button>
+          </div>
+          <div class="pricing-card">
+            <h4>Learning</h4>
+            <p class="pricing-card__price">$15<span>/mo</span></p>
+            <p>Full educational material access.</p>
+            <button type="button" class="cta-button cta-button--outline cta-button--small pricing-card__select" data-tier="Learning">Select</button>
+          </div>
+          <div class="pricing-card">
+            <h4>Investor</h4>
+            <p class="pricing-card__price">$25<span>/mo</span></p>
+            <p>Sit in on online meetings, plus discounts and invites to local public chapter meetings.</p>
+            <button type="button" class="cta-button cta-button--outline cta-button--small pricing-card__select" data-tier="Investor">Select</button>
+          </div>
+          <div class="pricing-card pricing-card--featured">
+            <h4>Vetted Investor</h4>
+            <p class="pricing-card__price">$65<span>/mo</span></p>
+            <p>Join Roundtables, bring investments to the group, and get full access to meetings and educational material.</p>
+            <button type="button" class="cta-button cta-button--small pricing-card__select" data-tier="Vetted Investor">Select</button>
+          </div>
+        </div>
       </section>
 
-      <section class="content-section join-waitlist">
+      <section class="content-section join-waitlist" id="join-waitlist">
         <h3>Join the Waitlist</h3>
-        <p>Membership isn&rsquo;t open yet &mdash; add your email and we&rsquo;ll reach out as soon as it is.</p>
-        <form id="waitlist-form" class="subscribe-form" novalidate>
-          <label for="waitlist-email" class="visually-hidden">Email address</label>
-          <input id="waitlist-email" name="email" type="email" placeholder="you@example.com" required />
+        <p>Membership isn&rsquo;t open yet &mdash; tell us a bit about yourself and we&rsquo;ll reach out as soon as it is.</p>
+        <form id="waitlist-form" class="waitlist-form" novalidate>
+          <div class="field-row">
+            <label class="field">
+              <span>Full name</span>
+              <input id="waitlist-name" name="name" type="text" required />
+            </label>
+            <label class="field">
+              <span>Email</span>
+              <input id="waitlist-email" name="email" type="email" placeholder="you@example.com" required />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Phone</span>
+              <input id="waitlist-phone" name="phone" type="tel" placeholder="(555) 555-5555" />
+            </label>
+            <label class="field">
+              <span>Interested tier</span>
+              <select id="waitlist-tier" name="tier">
+                <option value="">Not sure yet</option>
+                <option value="Curious">Curious &mdash; $8.99/mo</option>
+                <option value="Learning">Learning &mdash; $15/mo</option>
+                <option value="Investor">Investor &mdash; $25/mo</option>
+                <option value="Vetted Investor">Vetted Investor &mdash; $65/mo</option>
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Mailing address</span>
+            <input id="waitlist-address" name="address" type="text" placeholder="Street, City, State, ZIP" />
+          </label>
           <button type="submit" class="cta-button">Join the Waitlist</button>
         </form>
         <p class="subscribe-message" id="waitlist-message" role="status" hidden></p>
+        <div class="survey-prompt" id="survey-prompt" hidden>
+          <p>Want a free month once membership opens? Complete our quick member survey and we&rsquo;ll add it to your account.</p>
+          <a class="cta-button cta-button--outline" id="survey-prompt-link" href="/pin-member-questionnaire.html">Take the Survey</a>
+        </div>
       </section>
     </main>
 
@@ -65,24 +123,60 @@
     (function () {
       const form = document.getElementById('waitlist-form');
       const message = document.getElementById('waitlist-message');
+      const surveyPrompt = document.getElementById('survey-prompt');
+      const surveyPromptLink = document.getElementById('survey-prompt-link');
+      const tierSelect = document.getElementById('waitlist-tier');
+
+      // Arriving here from the survey's "Select Your Tier" link, or any
+      // other link that passes ?email= — pre-fill it so they don't retype it.
+      const prefillEmail = new URLSearchParams(window.location.search).get('email');
+      if (prefillEmail) {
+        document.getElementById('waitlist-email').value = prefillEmail;
+      }
+
+      document.querySelectorAll('.pricing-card__select').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          tierSelect.value = btn.dataset.tier;
+          document.querySelectorAll('.pricing-card').forEach(function (card) {
+            card.classList.remove('pricing-card--selected');
+          });
+          btn.closest('.pricing-card').classList.add('pricing-card--selected');
+          document.getElementById('join-waitlist').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document.getElementById('waitlist-name').focus();
+        });
+      });
+
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const email = document.getElementById('waitlist-email').value.trim();
+        const payload = {
+          name: document.getElementById('waitlist-name').value.trim(),
+          email: document.getElementById('waitlist-email').value.trim(),
+          phone: document.getElementById('waitlist-phone').value.trim(),
+          address: document.getElementById('waitlist-address').value.trim(),
+          tier: tierSelect.value,
+          source: 'membership-waitlist',
+        };
         message.hidden = false;
         message.classList.remove('subscribe-message--error');
         message.textContent = 'Signing you up…';
+        surveyPrompt.hidden = true;
         try {
           const res = await fetch('/api/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, source: 'membership-waitlist' }),
+            body: JSON.stringify(payload),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.success) {
             throw new Error(data.error || 'Something went wrong.');
           }
           message.textContent = 'Thanks — you’re on the waitlist!';
+          surveyPromptLink.href = '/pin-member-questionnaire.html?email=' + encodeURIComponent(payload.email);
           form.reset();
+          document.querySelectorAll('.pricing-card').forEach(function (card) {
+            card.classList.remove('pricing-card--selected');
+          });
+          surveyPrompt.hidden = false;
         } catch (err) {
           message.classList.add('subscribe-message--error');
           message.textContent = err.message || 'Unable to sign up right now. Please try again later.';

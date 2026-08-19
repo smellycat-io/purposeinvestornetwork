@@ -351,6 +351,10 @@
     transition: all 0.18s;
     letter-spacing: 0.02em;
   }
+  a.btn {
+    display: inline-block;
+    text-decoration: none;
+  }
   .btn-primary {
     background: var(--ink);
     color: var(--paper);
@@ -460,6 +464,17 @@
     margin-bottom: 12px;
   }
   .success-msg p { color: var(--muted); line-height: 1.7; }
+  .free-month-card {
+    margin-top: 28px;
+    padding: 24px;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .free-month-card p {
+    color: var(--ink);
+    margin-bottom: 16px;
+  }
 
   /* FOOTER */
   footer {
@@ -512,6 +527,11 @@
   <div class="intro-pill">
     <span class="pill-icon">✦</span>
     <span>Results go <strong>directly to the PIN founding team</strong></span>
+  </div>
+  <div class="intro-divider-v"></div>
+  <div class="intro-pill">
+    <span class="pill-icon">🎁</span>
+    <span>Complete it and get <strong>your first month free</strong> when you join</span>
   </div>
 </div>
 
@@ -1491,6 +1511,10 @@
     <div class="check">✦</div>
     <h2>Thank you.</h2>
     <p>Your responses have been received and will go directly to the PIN founding team. We'll be in touch as the new PIN takes shape.</p>
+    <div class="free-month-card" id="free-month-card">
+      <p id="free-month-text">🎁 <strong>You&rsquo;ve earned a free month</strong> when membership opens.</p>
+      <a class="btn btn-primary" id="free-month-cta" href="/become-a-member.html">Select Your Tier →</a>
+    </div>
   </div>
 
 </div><!-- /steps-wrap -->
@@ -1628,6 +1652,20 @@
         throw new Error('Server returned an error');
       }
 
+      const result = await response.json().catch(() => ({}));
+      const freeMonthText = document.getElementById('free-month-text');
+      const freeMonthCta = document.getElementById('free-month-cta');
+      if (result.alreadyOnWaitlist) {
+        freeMonthText.innerHTML = '🎁 <strong>Your free month has been applied</strong> to your waitlist spot.';
+        freeMonthCta.textContent = 'View Membership Options →';
+      } else {
+        freeMonthText.innerHTML = '🎁 <strong>You&rsquo;ve earned a free month</strong> when membership opens.';
+        freeMonthCta.textContent = 'Select Your Tier →';
+      }
+      if (answers.email) {
+        freeMonthCta.href = '/become-a-member.html?email=' + encodeURIComponent(answers.email);
+      }
+
       document.querySelectorAll('.step').forEach(s => (s.style.display = 'none'));
       document.getElementById('success').style.display = 'block';
       document.getElementById('progress-fill').style.width = '100%';
@@ -1681,7 +1719,14 @@
   }
 
   // ── Init ──
-  document.addEventListener('DOMContentLoaded', () => updateProgress(1));
+  document.addEventListener('DOMContentLoaded', () => {
+    updateProgress(1);
+    const prefillEmail = new URLSearchParams(window.location.search).get('email');
+    if (prefillEmail) {
+      const emailField = document.getElementById('email');
+      if (emailField) emailField.value = prefillEmail;
+    }
+  });
 </script>
 
 

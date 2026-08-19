@@ -14,4 +14,9 @@ module.exports = {
   ),
   POSTHOG_API_KEY: process.env.POSTHOG_API_KEY || null,
   POSTHOG_HOST: process.env.POSTHOG_HOST || 'https://app.posthog.com',
+  // Email notifications (survey submissions, waitlist signups) via SES.
+  // Both must be set — NOTIFY_EMAIL is where alerts go, SES_FROM_EMAIL must
+  // be a verified sender identity in the AWS account's SES setup.
+  NOTIFY_EMAIL: process.env.NOTIFY_EMAIL || null,
+  SES_FROM_EMAIL: process.env.SES_FROM_EMAIL || null,
 };

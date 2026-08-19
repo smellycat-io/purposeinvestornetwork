@@ -6,7 +6,8 @@ const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { s3Client, S3_BUCKET } = require('../shared/s3Client.js');
 const { dynamoDbDocClient, DYNAMODB_TABLE } = require('../db/dynamoClient.js');
-const { store, saveSurveyResponseToStore } = require('../db/store.js');
+const { store, saveSurveyResponseToStore, linkSurveyToWaitlistSubscriber } = require('../db/store.js');
+const { sendNotification } = require('../shared/email.js');
 
 const router = Router();
 
@@ -48,7 +49,7 @@ router.post('/api/survey', async (req, res) => {
   const createdAt = new Date().toISOString();
   const recordId = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
-  const sqlitePromise = Promise.resolve(saveSurveyResponseToStore(createdAt, email, payload));
+  const sqlitePromise = Promise.resolve(saveSurveyResponseToStore(createdAt, email, payload, recordId));
 
   const dynamoPromise = dynamoDbDocClient
     ? dynamoDbDocClient.send(new PutCommand({
@@ -77,6 +78,22 @@ router.post('/api/survey', async (req, res) => {
     return res.status(500).json({ success: false, error: 'Unable to save survey response' });
   }
 
+  // Free-month tracking: if this email already has a waitlist signup, credit
+  // it now. If not, `alreadyOnWaitlist` comes back false so the front-end
+  // knows to prompt them to go select a tier (they took the survey first).
+  const alreadyOnWaitlist = email ? linkSurveyToWaitlistSubscriber(email, recordId) : false;
+
+  await sendNotification(
+    'New PIN survey response',
+    [
+      `Email: ${email || '(not provided)'}`,
+      `Already on membership waitlist: ${alreadyOnWaitlist ? 'yes' : 'no'}`,
+      '',
+      'Full answers:',
+      JSON.stringify(answers, null, 2),
+    ].join('\n')
+  );
+
   if (s3Client) {
     const key = `responses/${Date.now()}-${Math.floor(Math.random() * 100000)}.json`;
     const command = new PutObjectCommand({
@@ -88,14 +105,14 @@ router.post('/api/survey', async (req, res) => {
 
     try {
       await s3Client.send(command);
-      return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, s3Key: key });
+      return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, alreadyOnWaitlist, s3Key: key });
     } catch (s3Err) {
       console.error('Failed to upload to S3:', s3Err);
-      return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, s3Error: 'upload failed' });
+      return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, alreadyOnWaitlist, s3Error: 'upload failed' });
     }
   }
 
-  return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId });
+  return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, alreadyOnWaitlist });
 });
 
 module.exports = router;
