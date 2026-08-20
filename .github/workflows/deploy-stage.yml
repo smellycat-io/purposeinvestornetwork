@@ -1,0 +1,313 @@
+name: Stage Deployment
+
+on:
+  push:
+    branches: [stage]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Merge shared assets into front-end for deployment
+        run: cp -r shared/. front-end/
+
+      - name: Deploy frontend to stage S3
+        uses: jakejarvis/s3-sync-action@v0.5.1
+        with:
+          args: --delete --exclude ".env" --exclude ".env.*"
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          SOURCE_DIR: ./front-end
+
+      - name: Invalidate stage CloudFront cache
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.STAGE_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Validate STAGE secrets
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_BACKEND_BUCKET_STAGE: ${{ secrets.AWS_BACKEND_BUCKET_STAGE }}
+          AWS_S3_BUCKET_STAGE: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+        run: |
+          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BACKEND_BUCKET_STAGE AWS_S3_BUCKET_STAGE)
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required GitHub secret: $var"
+              exit 1
+            fi
+          done
+          echo "All required STAGE secrets are present."
+
+      - name: Download private env file from STAGE backend bucket
+        run: |
+          if aws s3 cp s3://${{ secrets.AWS_BACKEND_BUCKET_STAGE }}/private/.env .env; then
+            echo "Loaded private env file from STAGE backend bucket."
+          else
+            echo "No private env file found in STAGE backend bucket; continuing without it."
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Generate private/backend/package.json from root dependencies
+        run: node scripts/generate-backend-package.js
+
+      - name: Install & Package Backend
+        run: |
+          cd private/backend
+          npm install --production
+          if [ -f ../../.env ]; then
+            cp ../../.env .env
+          fi
+          zip -r ../../backend.zip .
+          cd ../..
+
+      - name: Apply environment variables to stage Lambda
+        env:
+          ADMIN_USER: ${{ secrets.ADMIN_USER_STAGE }}
+          ADMIN_PASS: ${{ secrets.ADMIN_PASS_STAGE }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET_STAGE }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_BROWSER_DSN: ${{ secrets.SENTRY_BROWSER_DSN }}
+          SENTRY_ENVIRONMENT: staging
+          SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
+          SENTRY_TRACES_SAMPLE_RATE: ${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+          AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET_STAGE }}
+          AWS_DYNAMODB_TABLE: purpose-investor-network-survey-responses-stage
+          AWS_ROUNDTABLES_TABLE: purpose-investor-network-roundtables-stage
+          AWS_INITIATIVES_TABLE: purpose-investor-network-initiatives-stage
+          AWS_POSTS_TABLE: purpose-investor-network-posts-stage
+          AWS_IMAGES_TABLE: purpose-investor-network-images-stage
+          AWS_PRESS_TABLE: purpose-investor-network-press-stage
+          AWS_INVESTMENTS_TABLE: purpose-investor-network-investments-stage
+          AWS_EVENTS_TABLE: purpose-investor-network-events-stage
+          AWS_SETTINGS_TABLE: purpose-investor-network-settings-stage
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          function_name = 'purpose-investor-network-backend-pin-backend-stage'
+          env_path = Path('.env')
+          env_values = {}
+          reserved_keys = {
+              'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+              'AWS_DEFAULT_REGION', 'AWS_REGION', 'AWS_PROFILE', 'AWS_SHARED_CREDENTIALS_FILE',
+              'AWS_LAMBDA_FUNCTION_NAME', 'AWS_EXECUTION_ENV', 'AWS_PATH', 'PATH'
+          }
+
+          if env_path.exists():
+              with env_path.open('r', encoding='utf-8') as handle:
+                  for raw_line in handle.read().splitlines():
+                      line = raw_line.strip()
+                      if not line or line.startswith('#') or '=' not in line:
+                          continue
+                      key, value = line.split('=', 1)
+                      key = key.strip()
+                      if key not in reserved_keys:
+                          env_values[key] = value.strip()
+          else:
+              print('No .env file found; using workflow values and existing Lambda configuration.')
+
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'AWS_SETTINGS_TABLE', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
+              value = os.getenv(key)
+              if value:
+                  env_values[key] = value
+
+          try:
+              current_output = subprocess.check_output([
+                  'aws', 'lambda', 'get-function-configuration',
+                  '--function-name', function_name,
+                  '--query', 'Environment.Variables',
+                  '--output', 'json'
+              ], text=True)
+              current = json.loads(current_output) if current_output.strip() else {}
+          except subprocess.CalledProcessError as exc:
+              print(f'Lambda function not found yet; continuing with empty environment config: {exc}')
+              current = {}
+
+          current.update({
+              'ADMIN_USER': env_values.get('ADMIN_USER', current.get('ADMIN_USER', 'admin')),
+              'ADMIN_PASS': env_values.get('ADMIN_PASS', current.get('ADMIN_PASS', 'password')),
+              'SESSION_SECRET': env_values.get('SESSION_SECRET', current.get('SESSION_SECRET', '')),
+              'SENTRY_DSN': env_values.get('SENTRY_DSN', current.get('SENTRY_DSN', '')),
+              'SENTRY_BROWSER_DSN': env_values.get('SENTRY_BROWSER_DSN', current.get('SENTRY_BROWSER_DSN', '')),
+              'SENTRY_ENVIRONMENT': env_values.get('SENTRY_ENVIRONMENT', current.get('SENTRY_ENVIRONMENT', 'staging')),
+              'SENTRY_RELEASE': env_values.get('SENTRY_RELEASE', current.get('SENTRY_RELEASE', 'purpose-investor-network@latest')),
+              'SENTRY_TRACES_SAMPLE_RATE': env_values.get('SENTRY_TRACES_SAMPLE_RATE', current.get('SENTRY_TRACES_SAMPLE_RATE', '0.0')),
+              'AWS_S3_BUCKET': env_values.get('AWS_S3_BUCKET', current.get('AWS_S3_BUCKET', '')),
+              'AWS_DYNAMODB_TABLE': env_values.get('AWS_DYNAMODB_TABLE', current.get('AWS_DYNAMODB_TABLE', '')),
+              'AWS_ROUNDTABLES_TABLE': env_values.get('AWS_ROUNDTABLES_TABLE', current.get('AWS_ROUNDTABLES_TABLE', '')),
+              'AWS_INITIATIVES_TABLE': env_values.get('AWS_INITIATIVES_TABLE', current.get('AWS_INITIATIVES_TABLE', '')),
+              'AWS_POSTS_TABLE': env_values.get('AWS_POSTS_TABLE', current.get('AWS_POSTS_TABLE', '')),
+              'AWS_IMAGES_TABLE': env_values.get('AWS_IMAGES_TABLE', current.get('AWS_IMAGES_TABLE', '')),
+              'AWS_PRESS_TABLE': env_values.get('AWS_PRESS_TABLE', current.get('AWS_PRESS_TABLE', '')),
+              'AWS_INVESTMENTS_TABLE': env_values.get('AWS_INVESTMENTS_TABLE', current.get('AWS_INVESTMENTS_TABLE', '')),
+              'AWS_EVENTS_TABLE': env_values.get('AWS_EVENTS_TABLE', current.get('AWS_EVENTS_TABLE', '')),
+              'AWS_SETTINGS_TABLE': env_values.get('AWS_SETTINGS_TABLE', current.get('AWS_SETTINGS_TABLE', '')),
+              'NOTIFY_EMAIL': env_values.get('NOTIFY_EMAIL', current.get('NOTIFY_EMAIL', '')),
+              'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
+          })
+
+          try:
+              subprocess.check_call([
+                  'aws', 'lambda', 'update-function-configuration',
+                  '--function-name', function_name,
+                  '--environment', json.dumps({'Variables': current})
+              ])
+              print('Updated stage Lambda environment variables.')
+          except subprocess.CalledProcessError as exc:
+              print(f'Skipping stage Lambda environment update because the function is not available yet: {exc}')
+          PY
+
+      - name: Upload private env file to STAGE backend bucket
+        run: |
+          if [ -f .env ]; then
+            aws s3 cp .env s3://${{ secrets.AWS_BACKEND_BUCKET_STAGE }}/private/.env --acl private
+          else
+            echo "No local .env file available to upload."
+          fi
+
+      - name: Upload Zip to STAGE backend S3 bucket
+        run: |
+          aws s3 cp backend.zip s3://${{ secrets.AWS_BACKEND_BUCKET_STAGE }}/dist/backend.zip
+
+      - name: Ensure stage Lambda role has DynamoDB access
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role-stage'
+          account_id = subprocess.check_output([
+              'aws', 'sts', 'get-caller-identity', '--query', 'Account', '--output', 'text'
+          ], text=True).strip()
+          region = 'us-east-1'
+          tables = [
+              'purpose-investor-network-survey-responses-stage',
+              'purpose-investor-network-roundtables-stage',
+              'purpose-investor-network-initiatives-stage',
+              'purpose-investor-network-posts-stage',
+              'purpose-investor-network-images-stage',
+              'purpose-investor-network-press-stage',
+              'purpose-investor-network-investments-stage',
+              'purpose-investor-network-events-stage',
+              'purpose-investor-network-settings-stage',
+          ]
+          table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
+
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [{
+                  'Effect': 'Allow',
+                  'Action': [
+                      'dynamodb:GetItem',
+                      'dynamodb:PutItem',
+                      'dynamodb:DeleteItem',
+                      'dynamodb:Scan',
+                      'dynamodb:Query',
+                  ],
+                  'Resource': table_arns,
+              }],
+          }
+
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-content-tables-stage',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('DynamoDB access policy applied to stage Lambda role.')
+          PY
+
+      - name: Ensure stage Lambda role has SES access
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role-stage'
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [{
+                  'Effect': 'Allow',
+                  'Action': ['ses:SendEmail', 'ses:SendRawEmail'],
+                  'Resource': '*',
+              }],
+          }
+
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-ses-notifications-stage',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('SES access policy applied to stage Lambda role.')
+          PY
+
+      - name: Update stage Lambda function code
+        env:
+          AWS_BACKEND_BUCKET_STAGE: ${{ secrets.AWS_BACKEND_BUCKET_STAGE }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import time
+
+          function_name = 'purpose-investor-network-backend-pin-backend-stage'
+          for attempt in range(1, 13):
+              try:
+                  state = subprocess.check_output([
+                      'aws', 'lambda', 'get-function',
+                      '--function-name', function_name,
+                      '--query', 'Configuration.State',
+                      '--output', 'text'
+                  ], text=True).strip()
+                  print(f'Lambda state: {state}')
+                  if state == 'Active':
+                      subprocess.check_call([
+                          'aws', 'lambda', 'update-function-code',
+                          '--function-name', function_name,
+                          '--s3-bucket', os.environ['AWS_BACKEND_BUCKET_STAGE'],
+                          '--s3-key', 'dist/backend.zip'
+                      ])
+                      print('Stage Lambda code updated successfully.')
+                      break
+                  time.sleep(10)
+              except subprocess.CalledProcessError as exc:
+                  print(f'Waiting for stage Lambda to become active (attempt {attempt}/12): {exc}')
+                  time.sleep(10)
+          else:
+              raise SystemExit('Stage Lambda did not become active in time for code update.')
+          PY
