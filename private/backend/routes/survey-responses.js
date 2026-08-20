@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { captureException } = require('@sentry/aws-serverless');
+const { captureException, captureMessage } = require('@sentry/aws-serverless');
 const { PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { requireAdmin } = require('../shared/auth.js');
@@ -82,6 +82,11 @@ router.post('/api/survey', asyncRoute(async (req, res) => {
   // it now. If not, `alreadyOnWaitlist` comes back false so the front-end
   // knows to prompt them to go select a tier (they took the survey first).
   const alreadyOnWaitlist = email ? linkSurveyToWaitlistSubscriber(email, recordId) : false;
+
+  captureMessage(
+    `Survey response saved — email: "${email || '(not provided)'}", id: ${recordId}, alreadyOnWaitlist: ${alreadyOnWaitlist}`,
+    'info'
+  );
 
   await sendNotification(
     'New PIN survey response',

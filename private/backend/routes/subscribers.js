@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { captureMessage } = require('@sentry/aws-serverless');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { sendNotification } = require('../shared/email.js');
@@ -26,6 +27,8 @@ router.post('/api/subscribe', asyncRoute(async (req, res) => {
   };
 
   saveSubscriberToStore(new Date().toISOString(), email, source, details);
+
+  captureMessage(`Subscriber saved — email: "${email}", source: ${source}, tier: ${details.tier || '(none)'}`, 'info');
 
   if (source === 'membership-waitlist') {
     await sendNotification(

@@ -1,4 +1,5 @@
 const { Router } = require('express');
+const { captureMessage } = require('@sentry/aws-serverless');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const {
@@ -29,6 +30,7 @@ router.put(
       return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
     await updateNotifyEmail(email);
+    captureMessage(`Notification email updated to "${email}"`, 'info');
     res.json({ success: true, notifyEmail: email });
   }, 'Unable to update notification email.')
 );
@@ -42,9 +44,11 @@ router.put(
       return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     }
     if (!(await checkAdminPassword(currentPassword))) {
+      captureMessage('Admin password change rejected — current password did not match.', 'warning');
       return res.status(401).json({ error: 'Current password is incorrect.' });
     }
     await updateAdminPassword(newPassword);
+    captureMessage('Admin password updated successfully.', 'info');
     res.json({ success: true });
   }, 'Unable to update password.')
 );

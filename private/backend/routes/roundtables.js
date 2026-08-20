@@ -39,7 +39,9 @@ router.post(
   '/api/admin/roundtables',
   requireAdmin,
   asyncRoute(async (req, res) => {
-    res.status(201).json(await content.createRoundtable(req.body));
+    const roundtable = await content.createRoundtable(req.body);
+    captureMessage(`Roundtable created — id: ${roundtable.id}, name: "${roundtable.name}"`, 'info');
+    res.status(201).json(roundtable);
   }, 'Unable to create roundtable.')
 );
 
@@ -55,6 +57,7 @@ router.put(
       );
       return res.status(404).json({ error: 'Not found.' });
     }
+    captureMessage(`Roundtable updated — id: ${roundtable.id}, name: "${roundtable.name}"`, 'info');
     res.json(roundtable);
   }, 'Unable to update roundtable.')
 );
@@ -64,6 +67,7 @@ router.delete(
   requireAdmin,
   asyncRoute(async (req, res) => {
     await content.deleteRoundtable(req.params.id);
+    captureMessage(`Roundtable deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to delete roundtable.')
 );

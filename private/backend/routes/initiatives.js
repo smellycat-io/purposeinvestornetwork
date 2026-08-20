@@ -33,7 +33,9 @@ router.post(
   '/api/admin/initiatives',
   requireAdmin,
   asyncRoute(async (req, res) => {
-    res.status(201).json(await content.createInitiative(req.body));
+    const initiative = await content.createInitiative(req.body);
+    captureMessage(`Initiative created — id: ${initiative.id}, title: "${initiative.title}"`, 'info');
+    res.status(201).json(initiative);
   }, 'Unable to create initiative.')
 );
 
@@ -49,6 +51,7 @@ router.put(
       );
       return res.status(404).json({ error: 'Not found.' });
     }
+    captureMessage(`Initiative updated — id: ${initiative.id}, title: "${initiative.title}"`, 'info');
     res.json(initiative);
   }, 'Unable to update initiative.')
 );
@@ -58,6 +61,7 @@ router.delete(
   requireAdmin,
   asyncRoute(async (req, res) => {
     await content.deleteInitiative(req.params.id);
+    captureMessage(`Initiative deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to delete initiative.')
 );

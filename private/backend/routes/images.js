@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
@@ -41,6 +42,7 @@ router.post(
     }));
     const url = `/${key}`;
     const image = await content.createImage({ url, filename, contentType, size: buffer.length });
+    captureMessage(`Image uploaded — id: ${image.id}, filename: "${image.filename}"`, 'info');
     res.status(201).json(image);
   }, 'Unable to upload image.')
 );

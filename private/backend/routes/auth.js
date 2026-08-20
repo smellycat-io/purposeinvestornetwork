@@ -1,7 +1,7 @@
 const { Router } = require('express');
-const { captureException } = require('@sentry/aws-serverless');
+const { captureException, captureMessage } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
-const { checkAdminPassword } = require('../db/settings.js');
+const { checkAdminPassword, getSettings } = require('../db/settings.js');
 
 const router = Router();
 
@@ -30,10 +30,27 @@ router.get('/login', (req, res) => {
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    if (username === config.ADMIN_USER && (await checkAdminPassword(password))) {
+    // Fetched alongside the password check (not derived from it) so a failed
+    // login can report *which* credential it was checked against — the
+    // single most useful fact for diagnosing "my password doesn't work"
+    // without ever logging the password itself.
+    const [passwordOk, settings] = await Promise.all([checkAdminPassword(password), getSettings()]);
+    const usernameOk = username === config.ADMIN_USER;
+    const checkedAgainst = settings.adminPasswordHash ? 'stored password (set via Settings tab)' : 'bootstrap ADMIN_PASS env var';
+
+    if (usernameOk && passwordOk) {
       req.session.loggedIn = true;
+      captureMessage(
+        `Admin login succeeded — username: "${username}", checked against: ${checkedAgainst}`,
+        'info'
+      );
       return res.redirect('/admin');
     }
+
+    captureMessage(
+      `Admin login failed — username: "${username}" (username matched: ${usernameOk}, password matched: ${passwordOk}), checked against: ${checkedAgainst}`,
+      'warning'
+    );
   } catch (err) {
     captureException(err);
     return res.send('<p>Something went wrong checking your credentials. <a href="/login">Try again</a>.</p>');

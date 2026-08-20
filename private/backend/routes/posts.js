@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { join } = require('path');
+const { captureMessage } = require('@sentry/aws-serverless');
 const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
@@ -110,7 +111,9 @@ router.post(
   requireAdmin,
   asyncRoute(async (req, res) => {
     const payload = { ...req.body, body: sanitizePostBody(req.body.body) };
-    res.status(201).json(await content.createPost(payload));
+    const post = await content.createPost(payload);
+    captureMessage(`Post created — id: ${post.id}, type: ${post.type}, title: "${post.title}"`, 'info');
+    res.status(201).json(post);
   }, 'Unable to create post.')
 );
 
@@ -121,7 +124,11 @@ router.put(
     const updates = { ...req.body };
     if (updates.body) updates.body = sanitizePostBody(updates.body);
     const post = await content.updatePost(req.params.id, updates);
-    if (!post) return res.status(404).json({ error: 'Not found.' });
+    if (!post) {
+      captureMessage(`Post update 404: id "${req.params.id}" not found`, 'warning');
+      return res.status(404).json({ error: 'Not found.' });
+    }
+    captureMessage(`Post updated — id: ${post.id}, type: ${post.type}, title: "${post.title}"`, 'info');
     res.json(post);
   }, 'Unable to update post.')
 );
@@ -131,6 +138,7 @@ router.delete(
   requireAdmin,
   asyncRoute(async (req, res) => {
     await content.deletePost(req.params.id);
+    captureMessage(`Post deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to delete post.')
 );

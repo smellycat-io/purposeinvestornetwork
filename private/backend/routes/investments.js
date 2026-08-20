@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { join } = require('path');
+const { captureMessage } = require('@sentry/aws-serverless');
 const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
@@ -63,7 +64,9 @@ router.post(
       description: sanitizeRichText(req.body.description),
       outcomeSummary: req.body.outcomeSummary ? sanitizeRichText(req.body.outcomeSummary) : null,
     };
-    res.status(201).json(await content.createInvestment(payload));
+    const investment = await content.createInvestment(payload);
+    captureMessage(`Investment created — id: ${investment.id}, title: "${investment.title}"`, 'info');
+    res.status(201).json(investment);
   }, 'Unable to create investment.')
 );
 
@@ -75,7 +78,11 @@ router.put(
     if (updates.description) updates.description = sanitizeRichText(updates.description);
     if (updates.outcomeSummary) updates.outcomeSummary = sanitizeRichText(updates.outcomeSummary);
     const investment = await content.updateInvestment(req.params.id, updates);
-    if (!investment) return res.status(404).json({ error: 'Not found.' });
+    if (!investment) {
+      captureMessage(`Investment update 404: id "${req.params.id}" not found`, 'warning');
+      return res.status(404).json({ error: 'Not found.' });
+    }
+    captureMessage(`Investment updated — id: ${investment.id}, title: "${investment.title}"`, 'info');
     res.json(investment);
   }, 'Unable to update investment.')
 );
@@ -85,6 +92,7 @@ router.delete(
   requireAdmin,
   asyncRoute(async (req, res) => {
     await content.deleteInvestment(req.params.id);
+    captureMessage(`Investment deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to delete investment.')
 );

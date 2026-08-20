@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { join } = require('path');
+const { captureMessage } = require('@sentry/aws-serverless');
 const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
@@ -66,7 +67,9 @@ router.post(
   requireAdmin,
   asyncRoute(async (req, res) => {
     const payload = { ...req.body, description: sanitizeRichText(req.body.description) };
-    res.status(201).json(await content.createEvent(payload));
+    const event = await content.createEvent(payload);
+    captureMessage(`Event created — id: ${event.id}, title: "${event.title}"`, 'info');
+    res.status(201).json(event);
   }, 'Unable to create event.')
 );
 
@@ -77,7 +80,11 @@ router.put(
     const updates = { ...req.body };
     if (updates.description) updates.description = sanitizeRichText(updates.description);
     const event = await content.updateEvent(req.params.id, updates);
-    if (!event) return res.status(404).json({ error: 'Not found.' });
+    if (!event) {
+      captureMessage(`Event update 404: id "${req.params.id}" not found`, 'warning');
+      return res.status(404).json({ error: 'Not found.' });
+    }
+    captureMessage(`Event updated — id: ${event.id}, title: "${event.title}"`, 'info');
     res.json(event);
   }, 'Unable to update event.')
 );
@@ -87,6 +94,7 @@ router.delete(
   requireAdmin,
   asyncRoute(async (req, res) => {
     await content.deleteEvent(req.params.id);
+    captureMessage(`Event deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to delete event.')
 );
