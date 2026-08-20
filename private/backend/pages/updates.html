@@ -7,6 +7,7 @@
   <link rel="icon" href="/imgs/logos/favicon.png" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/nav.css" />
+  <link rel="stylesheet" href="/component/archive.css" />
 </head>
 <body>
   <div class="site-topbar" id="site-topbar"></div>
@@ -28,7 +29,11 @@
         <p class="muted">Loading&hellip;</p>
       </div>
     </main>
+  </div>
 
+  <div id="where-we-started"></div>
+
+  <div class="page-shell">
     <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
   </div>
 
@@ -55,6 +60,44 @@
         listEl.innerHTML = '<p class="muted">Unable to load updates right now. Please try again later.</p>';
       }
     })();
+  </script>
+
+  <!-- "Where We Started" — hardcoded archive section, not database-driven.
+       Swap REAL content in by editing this array; layout code lives in
+       /component/archive.js and needs no changes. -->
+  <script src="/component/video-facade.js"></script>
+  <script src="/component/archive.js"></script>
+  <script>
+    var WHERE_WE_STARTED_ENTRIES = [
+      {
+        title: 'Two Decades on Wall Street',
+        date: '1996–2016',
+        description: 'Curt Bassett spent two decades leading family office services for Merrill Lynch’s wealthiest clients out of New York — the work that would eventually shape PIN’s approach to mentoring the next generation.',
+        imageUrl: '/imgs/stock/new-york.jpg',
+      },
+      {
+        title: 'A Chapter at Zions Bank',
+        date: '2016–2017',
+        description: 'Zions Bank brought Curt on to build a similar service in-house in Salt Lake City, with plans to keep running PIN alongside it — until banking compliance called time on the experiment.',
+        imageUrl: '/imgs/stock/slc.jpg',
+      },
+      {
+        title: 'The Third Impact',
+        date: '2018–2019',
+        description: 'Curt wrote and launched The Third Impact at a UN Impact Investing conference, laying out the case for using Impact Investing to prepare the next generation for inheritance.',
+        videoUrl: 'https://youtu.be/M4De9dSVDoc',
+      },
+      {
+        title: 'Bringing PIN Back',
+        date: '2020–Today',
+        description: 'Consulting engagements with families across the country reignited the idea — and PIN began rebuilding as a national community of purpose-driven investors.',
+        imageUrl: '/imgs/stock/mingle.jpg',
+      },
+    ];
+
+    document.getElementById('where-we-started').innerHTML = whereWeStartedHtml(WHERE_WE_STARTED_ENTRIES, {
+      intro: 'Before the Roundtables and the dashboard, PIN was one person’s idea. A look back at how it got here.',
+    });
   </script>
 </body>
 </html>

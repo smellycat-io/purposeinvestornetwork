@@ -7,6 +7,7 @@
   <link rel="icon" href="/imgs/logos/favicon.png" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/nav.css" />
+  <link rel="stylesheet" href="/component/archive.css" />
 </head>
 <body>
   <div class="site-topbar" id="site-topbar"></div>
@@ -28,7 +29,11 @@
         <p class="muted">Loading&hellip;</p>
       </div>
     </main>
+  </div>
 
+  <div id="where-we-started"></div>
+
+  <div class="page-shell">
     <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
   </div>
 
@@ -54,6 +59,45 @@
         listEl.innerHTML = '<p class="muted">Unable to load the Conference series right now. Please try again later.</p>';
       }
     })();
+  </script>
+
+  <!-- "Where We Started" — hardcoded archive section, not database-driven.
+       Swap REAL content in by editing this array; layout code lives in
+       /component/archive.js and needs no changes. -->
+  <script src="/component/video-facade.js"></script>
+  <script src="/component/archive.js"></script>
+  <script>
+    var WHERE_WE_STARTED_ENTRIES = [
+      {
+        title: 'The First Showcase',
+        date: 'November 2017',
+        description: 'Members gathered at Zions Bank’s headquarters for a showcase of vetted investments — the format that would eventually grow into the annual Conference.',
+        imageUrl: '/imgs/stock/workshop.jpg',
+      },
+      {
+        title: 'Finding Our Voice',
+        date: '2019',
+        description: 'The Third Impact launched at a UN Impact Investing conference, putting PIN’s mentoring model in front of a national audience for the first time.',
+        videoUrl: 'https://youtu.be/M4De9dSVDoc',
+      },
+      {
+        title: 'Growing the Room',
+        date: '2021',
+        description: 'As PIN rebuilt, so did the gathering — smaller rooms, bigger conversations, and the first cross-Roundtable collaborations.',
+        imageUrl: '/imgs/stock/speaker.jpg',
+      },
+      {
+        title: 'A National Gathering',
+        date: 'Today',
+        description: 'What started as a single showcase is now PIN’s flagship annual Conference, bringing members together from Roundtables across the country.',
+        imageUrl: '/imgs/stock/collab_table.jpg',
+      },
+    ];
+
+    document.getElementById('where-we-started').innerHTML = whereWeStartedHtml(WHERE_WE_STARTED_ENTRIES, {
+      heading: 'Where the Conference Started',
+      intro: 'From a single showcase at a bank headquarters to PIN’s flagship annual gathering.',
+    });
   </script>
 </body>
 </html>

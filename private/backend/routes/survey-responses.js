@@ -42,7 +42,7 @@ router.get(
   }, 'Unable to load survey responses.')
 );
 
-router.post('/api/survey', async (req, res) => {
+router.post('/api/survey', asyncRoute(async (req, res) => {
   const answers = req.body.answers || {};
   const email = (answers.email || '').trim() || null;
   const payload = JSON.stringify(answers);
@@ -113,6 +113,6 @@ router.post('/api/survey', async (req, res) => {
   }
 
   return res.json({ success: true, sqliteId: sqliteResult, dynamoId: recordId, alreadyOnWaitlist });
-});
+}, 'Unable to save survey response.'));
 
 module.exports = router;
