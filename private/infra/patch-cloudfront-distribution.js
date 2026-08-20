@@ -33,6 +33,16 @@ const BACKEND_PATH_PATTERNS = [
   '/sentry-test',
   '/roundtables',
   '/roundtables/*',
+  '/press',
+  '/investments',
+  '/investments/*',
+  '/events',
+  '/events/*',
+  '/conference',
+  '/education',
+  '/education/*',
+  '/updates',
+  '/updates/*',
 ];
 
 const [, , configPath, apiDomain] = process.argv;
