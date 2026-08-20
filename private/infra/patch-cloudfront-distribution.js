@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 /**
  * Patches an existing CloudFront distribution config (already fetched via
- * `aws cloudfront get-distribution-config`) to add an API Gateway origin
- * plus path-based cache behaviors for the backend routes.
+ * `aws cloudfront get-distribution-config`) to:
+ *   - add an API Gateway origin plus path-based cache behaviors for the
+ *     small, stable set of routes that genuinely need the Lambda backend
+ *   - attach the static-routing CloudFront Function (see
+ *     cloudfront-static-routing.js) to the default (S3) cache behavior,
+ *     so clean content URLs resolve to the right static file
+ *   - remove cache behaviors for paths that used to need Lambda routing
+ *     but are now plain static files served by the default S3 behavior
+ *     (every content-type page — Roundtables, Press, Investments, Events,
+ *     Conference, Education, Updates — moved to static hosting; only the
+ *     truly dynamic/admin-gated routes below still need Lambda)
  *
  * This does NOT call AWS directly — it only transforms a JSON file you
  * already fetched, and prints the result. You still run `update-distribution`
@@ -10,11 +19,14 @@
  * anything live.
  *
  * Usage:
- *   node private/infra/patch-cloudfront-distribution.js <dist-config.json> <api-domain> > dist-config-updated.json
+ *   node private/infra/patch-cloudfront-distribution.js <dist-config.json> <api-domain> [function-arn] > dist-config-updated.json
  *
  * Where <api-domain> is just the hostname, e.g.
  *   abc123xyz.execute-api.us-east-1.amazonaws.com
  * (no https://, no trailing slash — use the ApiDomainOnly stack output)
+ *
+ * <function-arn> is the published CloudFront Function ARN (from
+ * `aws cloudfront publish-function`), only needed once to wire it up.
  */
 
 const fs = require('fs');
@@ -23,6 +35,9 @@ const CACHING_DISABLED_POLICY = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad'; // Manag
 const ALL_VIEWER_EXCEPT_HOST_POLICY = 'b689b0a8-53d0-40ab-baf2-68738e2966ac'; // Managed-AllViewerExceptHostHeader
 const API_ORIGIN_ID = 'ApiBackendOrigin';
 
+// Genuinely dynamic / admin-gated routes — the only ones that still need
+// to hit the Lambda backend. Content pages are static now; adding a new
+// content type never requires touching this list.
 const BACKEND_PATH_PATTERNS = [
   '/login',
   '/logout',
@@ -31,6 +46,12 @@ const BACKEND_PATH_PATTERNS = [
   '/api/*',
   '/env.js',
   '/sentry-test',
+];
+
+// Cache behaviors that predate the static-hosting migration and are no
+// longer needed — every one of these paths is now a static file resolved
+// via the default behavior + the static-routing CloudFront Function.
+const OBSOLETE_PATH_PATTERNS = [
   '/roundtables',
   '/roundtables/*',
   '/press',
@@ -45,10 +66,10 @@ const BACKEND_PATH_PATTERNS = [
   '/updates/*',
 ];
 
-const [, , configPath, apiDomain] = process.argv;
+const [, , configPath, apiDomain, functionArn] = process.argv;
 
 if (!configPath || !apiDomain) {
-  console.error('Usage: node patch-cloudfront-distribution.js <dist-config.json> <api-domain>');
+  console.error('Usage: node patch-cloudfront-distribution.js <dist-config.json> <api-domain> [function-arn]');
   process.exit(1);
 }
 
@@ -113,6 +134,15 @@ function makeBackendBehavior(pathPattern) {
   };
 }
 
+const beforeCount = config.CacheBehaviors.Items.length;
+config.CacheBehaviors.Items = config.CacheBehaviors.Items.filter(
+  (b) => !OBSOLETE_PATH_PATTERNS.includes(b.PathPattern)
+);
+const removedCount = beforeCount - config.CacheBehaviors.Items.length;
+if (removedCount > 0) {
+  console.error(`Removed ${removedCount} obsolete cache behavior(s) for now-static content paths.`);
+}
+
 const existingPatterns = new Set(config.CacheBehaviors.Items.map((b) => b.PathPattern));
 for (const pattern of BACKEND_PATH_PATTERNS) {
   if (!existingPatterns.has(pattern)) {
@@ -122,5 +152,14 @@ for (const pattern of BACKEND_PATH_PATTERNS) {
   }
 }
 config.CacheBehaviors.Quantity = config.CacheBehaviors.Items.length;
+
+if (functionArn) {
+  config.DefaultCacheBehavior.FunctionAssociations = {
+    Quantity: 1,
+    Items: [{ EventType: 'viewer-request', FunctionARN: functionArn }],
+  };
+} else {
+  console.error('Note: no function-arn given, leaving DefaultCacheBehavior.FunctionAssociations unchanged.');
+}
 
 process.stdout.write(JSON.stringify(config, null, 2));

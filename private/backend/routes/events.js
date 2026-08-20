@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const { join } = require('path');
 const { captureMessage } = require('@sentry/aws-serverless');
 const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
@@ -18,20 +17,6 @@ function sanitizeRichText(html) {
     },
   });
 }
-
-// The flagship "Conference" series gets its own dedicated page — same
-// Events data, just pre-filtered to isConference:true.
-router.get('/conference', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/conference.html'));
-});
-
-router.get('/events', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/events.html'));
-});
-
-router.get('/events/:slug', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/event.html'));
-});
 
 router.get(
   '/api/events',

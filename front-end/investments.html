@@ -34,26 +34,23 @@
 
   <script src="/dom-utils.js"></script>
   <script src="/component/card.js"></script>
+  <script src="/component/list-page.js"></script>
   <script>
-    (async function () {
-      const listEl = document.getElementById('investments-list');
-      try {
-        const items = await fetchJson('/api/investments');
-        if (!items.length) {
-          listEl.innerHTML = '<p class="muted">No investments have been published yet. Check back soon.</p>';
-          return;
-        }
-        listEl.innerHTML = items.map((inv) => linkCardHtml({
+    renderListPage({
+      endpoint: '/api/investments',
+      lists: [{
+        containerId: 'investments-list',
+        emptyText: 'No investments have been published yet. Check back soon.',
+        errorText: 'Unable to load investments right now. Please try again later.',
+        itemHtml: (inv) => linkCardHtml({
           href: `/investments/${encodeURIComponent(inv.slug)}`,
           imageUrl: inv.imageUrl,
           title: `${inv.status === 'completed' ? 'Completed' : 'Open'} — ${inv.title}`,
           description: inv.description,
           headingLevel: 3,
-        })).join('');
-      } catch (err) {
-        listEl.innerHTML = '<p class="muted">Unable to load investments right now. Please try again later.</p>';
-      }
-    })();
+        }),
+      }],
+    });
   </script>
 </body>
 </html>

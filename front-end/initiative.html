@@ -30,51 +30,37 @@
   <script src="/dom-utils.js"></script>
   <script src="/component/card.js"></script>
   <script src="/component/banner.js"></script>
+  <script src="/component/detail-page.js"></script>
   <script>
-    (async function () {
-      const contentEl = document.getElementById('initiative-content');
-      const slug = lastPathSegment();
-
-      try {
-        const [{ initiative, updates }, roundtables] = await Promise.all([
-          fetchJson(`/api/initiatives/${encodeURIComponent(slug)}`),
-          fetchJson('/api/roundtables').catch(() => []),
-        ]);
-        document.title = `${initiative.title} | Purpose Investor Network`;
-
+    renderDetailPage({
+      contentElId: 'initiative-content',
+      bannerSlotId: 'banner-slot',
+      load: (slug) => Promise.all([
+        fetchJson(`/api/initiatives/${encodeURIComponent(slug)}`),
+        fetchJson('/api/roundtables').catch(() => []),
+      ]).then(([{ initiative, updates }, roundtables]) => ({ initiative, updates, roundtables })),
+      pageTitle: (data) => `${data.initiative.title} | Purpose Investor Network`,
+      mapBanner: ({ initiative, roundtables }) => {
         const parentRoundtables = roundtables.filter((r) => (initiative.roundtableIds || []).includes(r.id));
         const parentsHtml = parentRoundtables.length
           ? `<p class="muted">Part of ${parentRoundtables.map((r) => `<a href="/roundtables/${encodeURIComponent(r.slug)}">${escapeHtml(r.name)}</a>`).join(', ')}</p>`
           : '';
-
+        return { imageUrl: initiative.imageUrl, title: initiative.title, description: initiative.description, extraHtml: parentsHtml };
+      },
+      renderBody: ({ updates }) => {
         const updatesHtml = updates.length
           ? updates.map((u) => updateCardHtml(u)).join('')
           : '<p class="muted">No updates have been posted yet.</p>';
-
-        const { bannerHtml, headingHtml } = pageBannerHtml({
-          imageUrl: initiative.imageUrl,
-          title: initiative.title,
-          description: initiative.description,
-          extraHtml: parentsHtml,
-        });
-        document.getElementById('banner-slot').innerHTML = bannerHtml;
-
-        contentEl.innerHTML = `
-          ${headingHtml}
-
+        return `
           <section class="content-section">
             <h3>Updates</h3>
             <div class="update-list">${updatesHtml}</div>
           </section>
         `;
-      } catch (err) {
-        if (err.status === 404) {
-          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that initiative. It may have been renamed or removed.</p>';
-        } else {
-          contentEl.innerHTML = '<p class="muted">Unable to load this initiative right now. Please try again later.</p>';
-        }
-      }
-    })();
+      },
+      notFoundText: 'We couldn’t find that initiative. It may have been renamed or removed.',
+      errorText: 'Unable to load this initiative right now. Please try again later.',
+    });
   </script>
 </body>
 </html>

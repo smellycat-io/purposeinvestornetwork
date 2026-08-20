@@ -36,11 +36,10 @@
 
   <script src="/dom-utils.js"></script>
   <script src="/component/card.js"></script>
+  <script src="/component/list-page.js"></script>
   <script>
     (async function () {
       const bookEl = document.getElementById('book-module');
-      const listEl = document.getElementById('education-list');
-
       try {
         const book = await fetchJson('/api/book');
         if (book) {
@@ -59,24 +58,23 @@
       } catch (err) {
         // Non-critical — the book module just won't render.
       }
+    })();
 
-      try {
-        const posts = await fetchJson('/api/education');
-        if (!posts.length) {
-          listEl.innerHTML = '<p class="muted">No articles have been published yet. Check back soon.</p>';
-          return;
-        }
-        listEl.innerHTML = posts.map((post) => linkCardHtml({
+    renderListPage({
+      endpoint: '/api/education',
+      lists: [{
+        containerId: 'education-list',
+        emptyText: 'No articles have been published yet. Check back soon.',
+        errorText: 'Unable to load articles right now. Please try again later.',
+        itemHtml: (post) => linkCardHtml({
           href: `/education/${encodeURIComponent(post.slug)}`,
           imageUrl: post.imageUrl,
           title: post.memberOnly ? `${post.title} (Members Only)` : post.title,
           description: post.excerpt || '',
           headingLevel: 3,
-        })).join('');
-      } catch (err) {
-        listEl.innerHTML = '<p class="muted">Unable to load articles right now. Please try again later.</p>';
-      }
-    })();
+        }),
+      }],
+    });
   </script>
 </body>
 </html>

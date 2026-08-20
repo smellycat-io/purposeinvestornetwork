@@ -30,15 +30,15 @@
   <script src="/dom-utils.js"></script>
   <script src="/component/card.js"></script>
   <script src="/component/banner.js"></script>
+  <script src="/component/detail-page.js"></script>
   <script>
-    (async function () {
-      const contentEl = document.getElementById('roundtable-content');
-      const slug = lastPathSegment();
-
-      try {
-        const { roundtable, initiatives, updates } = await fetchJson(`/api/roundtables/${encodeURIComponent(slug)}`);
-        document.title = `${roundtable.name} | Purpose Investor Network`;
-
+    renderDetailPage({
+      contentElId: 'roundtable-content',
+      bannerSlotId: 'banner-slot',
+      load: (slug) => fetchJson(`/api/roundtables/${encodeURIComponent(slug)}`),
+      pageTitle: (data) => `${data.roundtable.name} | Purpose Investor Network`,
+      mapBanner: (data) => ({ imageUrl: data.roundtable.imageUrl, title: data.roundtable.name, description: data.roundtable.description }),
+      renderBody: ({ initiatives, updates }) => {
         const initiativesById = {};
         initiatives.forEach((i) => { initiativesById[i.id] = i; });
 
@@ -63,16 +63,7 @@
             }).join('')
           : '<p class="muted">No updates have been posted yet.</p>';
 
-        const { bannerHtml, headingHtml } = pageBannerHtml({
-          imageUrl: roundtable.imageUrl,
-          title: roundtable.name,
-          description: roundtable.description,
-        });
-        document.getElementById('banner-slot').innerHTML = bannerHtml;
-
-        contentEl.innerHTML = `
-          ${headingHtml}
-
+        return `
           <section class="content-section">
             <h3>Initiatives</h3>
             <div class="card-grid">${initiativesHtml}</div>
@@ -83,14 +74,10 @@
             <div class="update-list">${updatesHtml}</div>
           </section>
         `;
-      } catch (err) {
-        if (err.status === 404) {
-          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that roundtable. It may have been renamed or removed.</p>';
-        } else {
-          contentEl.innerHTML = '<p class="muted">Unable to load this roundtable right now. Please try again later.</p>';
-        }
-      }
-    })();
+      },
+      notFoundText: 'We couldn’t find that roundtable. It may have been renamed or removed.',
+      errorText: 'Unable to load this roundtable right now. Please try again later.',
+    });
   </script>
 </body>
 </html>

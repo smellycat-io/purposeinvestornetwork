@@ -1,15 +1,10 @@
 const { Router } = require('express');
-const { join } = require('path');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 
 const router = Router();
-
-router.get('/press', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/press.html'));
-});
 
 router.get(
   '/api/press',

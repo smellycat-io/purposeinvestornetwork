@@ -26,17 +26,15 @@
   </div>
 
   <script src="/dom-utils.js"></script>
+  <script src="/component/detail-page.js"></script>
   <script>
-    (async function () {
-      const contentEl = document.getElementById('article-content');
-      const slug = lastPathSegment();
-
-      try {
-        const post = await fetchJson(`/api/education/${encodeURIComponent(slug)}`);
-        document.title = `${post.title} | Purpose Investor Network`;
-
+    renderDetailPage({
+      contentElId: 'article-content',
+      useBanner: false,
+      load: (slug) => fetchJson(`/api/education/${encodeURIComponent(slug)}`),
+      pageTitle: (post) => `${post.title} | Purpose Investor Network`,
+      renderBody: (post) => {
         const metaLine = `${post.author ? escapeHtml(post.author) + ' &bull; ' : ''}${escapeHtml(formatDate(post.publishedAt))}`;
-
         const bodyHtml = post.memberLocked
           ? `
             <p>${escapeHtml(post.excerpt || '')}</p>
@@ -46,8 +44,7 @@
             </div>
           `
           : `<div class="update-body">${post.body || ''}</div>`;
-
-        contentEl.innerHTML = `
+        return `
           <div class="page-heading">
             ${post.imageUrl ? `<img class="article-hero" src="${escapeHtml(post.imageUrl)}" alt="" />` : ''}
             <h2>${escapeHtml(post.title)}</h2>
@@ -57,14 +54,10 @@
             ${bodyHtml}
           </section>
         `;
-      } catch (err) {
-        if (err.status === 404) {
-          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that article. It may have been renamed or removed.</p>';
-        } else {
-          contentEl.innerHTML = '<p class="muted">Unable to load this article right now. Please try again later.</p>';
-        }
-      }
-    })();
+      },
+      notFoundText: 'We couldn’t find that article. It may have been renamed or removed.',
+      errorText: 'Unable to load this article right now. Please try again later.',
+    });
   </script>
 </body>
 </html>

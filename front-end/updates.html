@@ -38,16 +38,15 @@
   </div>
 
   <script src="/dom-utils.js"></script>
+  <script src="/component/list-page.js"></script>
   <script>
-    (async function () {
-      const listEl = document.getElementById('updates-list');
-      try {
-        const posts = await fetchJson('/api/updates');
-        if (!posts.length) {
-          listEl.innerHTML = '<p class="muted">No updates have been posted yet. Check back soon.</p>';
-          return;
-        }
-        listEl.innerHTML = posts.map((post) => `
+    renderListPage({
+      endpoint: '/api/updates',
+      lists: [{
+        containerId: 'updates-list',
+        emptyText: 'No updates have been posted yet. Check back soon.',
+        errorText: 'Unable to load updates right now. Please try again later.',
+        itemHtml: (post) => `
           <a class="update-card update-card--link" href="/updates/${encodeURIComponent(post.slug)}">
             <div class="update-meta">
               <span>${escapeHtml(formatDate(post.publishedAt))}</span>
@@ -55,11 +54,9 @@
             </div>
             <h4>${escapeHtml(post.title)}</h4>
           </a>
-        `).join('');
-      } catch (err) {
-        listEl.innerHTML = '<p class="muted">Unable to load updates right now. Please try again later.</p>';
-      }
-    })();
+        `,
+      }],
+    });
   </script>
 
   <!-- "Where We Started" — hardcoded archive section, not database-driven.

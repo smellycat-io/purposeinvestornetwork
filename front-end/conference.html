@@ -39,26 +39,23 @@
 
   <script src="/dom-utils.js"></script>
   <script src="/component/card.js"></script>
+  <script src="/component/list-page.js"></script>
   <script>
-    (async function () {
-      const listEl = document.getElementById('conference-list');
-      try {
-        const events = await fetchJson('/api/events?conference=true');
-        if (!events.length) {
-          listEl.innerHTML = '<p class="muted">No Conference events have been published yet. Check back soon.</p>';
-          return;
-        }
-        listEl.innerHTML = events.map((e) => linkCardHtml({
+    renderListPage({
+      endpoint: '/api/events?conference=true',
+      lists: [{
+        containerId: 'conference-list',
+        emptyText: 'No Conference events have been published yet. Check back soon.',
+        errorText: 'Unable to load the Conference series right now. Please try again later.',
+        itemHtml: (e) => linkCardHtml({
           href: `/events/${encodeURIComponent(e.slug)}`,
           imageUrl: e.imageUrl,
           title: e.title,
           description: `${formatDate(e.startsAt)}${e.location ? ' — ' + e.location : ''}`,
           headingLevel: 3,
-        })).join('');
-      } catch (err) {
-        listEl.innerHTML = '<p class="muted">Unable to load the Conference series right now. Please try again later.</p>';
-      }
-    })();
+        }),
+      }],
+    });
   </script>
 
   <!-- "Where We Started" — hardcoded archive section, not database-driven.

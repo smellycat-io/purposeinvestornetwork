@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const { join } = require('path');
 const { captureMessage } = require('@sentry/aws-serverless');
 const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
@@ -18,14 +17,6 @@ function sanitizeRichText(html) {
     },
   });
 }
-
-router.get('/investments', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/investments.html'));
-});
-
-router.get('/investments/:slug', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/investment.html'));
-});
 
 router.get(
   '/api/investments',

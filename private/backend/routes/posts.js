@@ -1,5 +1,4 @@
 const { Router } = require('express');
-const { join } = require('path');
 const { captureMessage } = require('@sentry/aws-serverless');
 const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
@@ -37,14 +36,6 @@ router.get(
 
 // --- Education (Posts type:'education' — preview + paywall via redactPost) ---
 
-router.get('/education', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/education.html'));
-});
-
-router.get('/education/:slug', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/education-article.html'));
-});
-
 router.get(
   '/api/education',
   asyncRoute(async (req, res) => {
@@ -73,14 +64,6 @@ router.get(
 );
 
 // --- PIN Updates (Posts type:'announcement' — always public) ---
-
-router.get('/updates', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/updates.html'));
-});
-
-router.get('/updates/:slug', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'pages/update.html'));
-});
 
 router.get(
   '/api/updates',

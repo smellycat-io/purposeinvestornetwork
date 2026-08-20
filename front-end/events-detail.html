@@ -29,44 +29,31 @@
 
   <script src="/dom-utils.js"></script>
   <script src="/component/banner.js"></script>
+  <script src="/component/detail-page.js"></script>
   <script>
-    (async function () {
-      const contentEl = document.getElementById('event-content');
-      const slug = lastPathSegment();
-
-      try {
-        const evt = await fetchJson(`/api/events/${encodeURIComponent(slug)}`);
-        document.title = `${evt.title} | Purpose Investor Network`;
-
-        const { bannerHtml, headingHtml } = pageBannerHtml({
-          imageUrl: evt.imageUrl,
-          title: evt.title,
-          description: formatDate(evt.startsAt),
-        });
-        document.getElementById('banner-slot').innerHTML = bannerHtml;
-
+    renderDetailPage({
+      contentElId: 'event-content',
+      bannerSlotId: 'banner-slot',
+      load: (slug) => fetchJson(`/api/events/${encodeURIComponent(slug)}`),
+      pageTitle: (evt) => `${evt.title} | Purpose Investor Network`,
+      mapBanner: (evt) => ({ imageUrl: evt.imageUrl, title: evt.title, description: formatDate(evt.startsAt) }),
+      renderBody: (evt) => {
         const whenLine = evt.endsAt
           ? `${formatDate(evt.startsAt)} &ndash; ${formatDate(evt.endsAt)}`
           : formatDate(evt.startsAt);
         const whereLine = evt.virtualLink
           ? `<a href="${escapeHtml(evt.virtualLink)}" target="_blank" rel="noopener">Join virtually</a>`
           : escapeHtml(evt.location || '');
-
-        contentEl.innerHTML = `
-          ${headingHtml}
+        return `
           <p class="muted">${whenLine}${whereLine ? ' &bull; ' + whereLine : ''}</p>
           <section class="content-section">
             <div class="update-body">${evt.description || ''}</div>
           </section>
         `;
-      } catch (err) {
-        if (err.status === 404) {
-          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that event. It may have been renamed, removed, or is members-only.</p>';
-        } else {
-          contentEl.innerHTML = '<p class="muted">Unable to load this event right now. Please try again later.</p>';
-        }
-      }
-    })();
+      },
+      notFoundText: 'We couldn’t find that event. It may have been renamed, removed, or is members-only.',
+      errorText: 'Unable to load this event right now. Please try again later.',
+    });
   </script>
 </body>
 </html>

@@ -40,26 +40,23 @@
 
   <script src="/dom-utils.js"></script>
   <script src="/component/card.js"></script>
+  <script src="/component/list-page.js"></script>
   <script>
-    (async function () {
-      const listEl = document.getElementById('roundtables-list');
-      try {
-        const roundtables = await fetchJson('/api/roundtables');
-        if (!roundtables.length) {
-          listEl.innerHTML = '<p class="muted">No roundtables have been published yet. Check back soon.</p>';
-          return;
-        }
-        listEl.innerHTML = roundtables.map((r) => linkCardHtml({
+    renderListPage({
+      endpoint: '/api/roundtables',
+      lists: [{
+        containerId: 'roundtables-list',
+        emptyText: 'No roundtables have been published yet. Check back soon.',
+        errorText: 'Unable to load roundtables right now. Please try again later.',
+        itemHtml: (r) => linkCardHtml({
           href: `/roundtables/${encodeURIComponent(r.slug)}`,
           imageUrl: r.imageUrl,
           title: r.name,
           description: r.description,
           headingLevel: 3,
-        })).join('');
-      } catch (err) {
-        listEl.innerHTML = '<p class="muted">Unable to load roundtables right now. Please try again later.</p>';
-      }
-    })();
+        }),
+      }],
+    });
   </script>
 </body>
 </html>

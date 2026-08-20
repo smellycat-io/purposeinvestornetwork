@@ -26,18 +26,16 @@
   </div>
 
   <script src="/dom-utils.js"></script>
+  <script src="/component/detail-page.js"></script>
   <script>
-    (async function () {
-      const contentEl = document.getElementById('update-content');
-      const slug = lastPathSegment();
-
-      try {
-        const post = await fetchJson(`/api/updates/${encodeURIComponent(slug)}`);
-        document.title = `${post.title} | Purpose Investor Network`;
-
+    renderDetailPage({
+      contentElId: 'update-content',
+      useBanner: false,
+      load: (slug) => fetchJson(`/api/updates/${encodeURIComponent(slug)}`),
+      pageTitle: (post) => `${post.title} | Purpose Investor Network`,
+      renderBody: (post) => {
         const metaLine = `${post.author ? escapeHtml(post.author) + ' &bull; ' : ''}${escapeHtml(formatDate(post.publishedAt))}`;
-
-        contentEl.innerHTML = `
+        return `
           <div class="page-heading">
             <h2>${escapeHtml(post.title)}</h2>
             <p class="muted">${metaLine}</p>
@@ -46,14 +44,10 @@
             <div class="update-body">${post.body || ''}</div>
           </section>
         `;
-      } catch (err) {
-        if (err.status === 404) {
-          contentEl.innerHTML = '<p class="muted">We couldn&rsquo;t find that update. It may have been renamed or removed.</p>';
-        } else {
-          contentEl.innerHTML = '<p class="muted">Unable to load this update right now. Please try again later.</p>';
-        }
-      }
-    })();
+      },
+      notFoundText: 'We couldn’t find that update. It may have been renamed or removed.',
+      errorText: 'Unable to load this update right now. Please try again later.',
+    });
   </script>
 </body>
 </html>
