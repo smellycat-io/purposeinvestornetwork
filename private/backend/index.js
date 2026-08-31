@@ -42,9 +42,22 @@ app.use(require('./routes/system.js'));
 // invisible to Sentry — this is the actual blind spot for a 404 caused by
 // a client calling a URL/method that isn't wired up, vs. business-logic
 // "not found" responses (which already report individually in each route).
+//
+// The overwhelming majority of hits here are automated vulnerability
+// scanners probing for common misconfigurations (/admin/index.php,
+// /api/token, /api/debug, etc.), not real blind spots — the app correctly
+// 404s all of them. A fixed message (rather than embedding the scanned URL)
+// keeps every one of those grouped into a single ongoing Sentry issue
+// instead of a new "issue" per random path, at 'info' rather than
+// 'warning' so they don't need individual triage; the actual method/URL is
+// still attached as extra data on each event for whenever this issue is
+// worth reviewing.
 app.use(['/api', '/admin'], (req, res) => {
   const authed = !!(req.session && req.session.loggedIn);
-  captureMessage(`Unmatched route 404: ${req.method} ${req.originalUrl} (authenticated: ${authed})`, 'warning');
+  captureMessage('Unmatched route 404', {
+    level: 'info',
+    extra: { method: req.method, url: req.originalUrl, authenticated: authed },
+  });
   res.status(404).json({ error: 'Not found.' });
 });
 
