@@ -6,12 +6,14 @@ const express = require('express');
 const session = require('express-session');
 const { join } = require('path');
 const config = require('./shared/config.js');
+const { DynamoDBSessionStore } = require('./db/sessions.js');
 
 const app = express();
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
+  store: new DynamoDBSessionStore(),
   secret: config.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
