@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Accept Invite | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+</head>
+<body style="font-family:system-ui, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; background:#f5f3ef; margin:0;">
+  <div style="background:#ffffff; padding:32px; border-radius:16px; box-shadow:0 16px 40px rgba(0,0,0,0.08); width:340px;">
+    <h1 style="margin:0 0 20px;font-size:22px;">Set up your account</h1>
+
+    <form id="ai-form">
+      <label style="display:block; margin-bottom:10px; font-weight:600;">Username</label>
+      <input id="ai-username" required style="width:100%;padding:10px;margin-bottom:16px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;" />
+      <label style="display:block; margin-bottom:10px; font-weight:600;">Password</label>
+      <input type="password" id="ai-password" required minlength="8" style="width:100%;padding:10px;margin-bottom:16px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;" />
+      <label style="display:block; margin-bottom:10px; font-weight:600;">Confirm password</label>
+      <input type="password" id="ai-confirm" required minlength="8" style="width:100%;padding:10px;margin-bottom:20px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box;" />
+      <button type="submit" style="width:100%;background:#d70010;color:#fff;border:none;padding:12px 0;border-radius:999px;font-weight:700;cursor:pointer;">Create account</button>
+    </form>
+
+    <p id="ai-message" style="display:none;margin-top:16px;font-size:14px;"></p>
+  </div>
+
+  <script src="/dom-utils.js"></script>
+  <script>
+    (function () {
+      const token = new URLSearchParams(window.location.search).get('token');
+      const form = document.getElementById('ai-form');
+      const messageEl = document.getElementById('ai-message');
+
+      if (!token) {
+        form.style.display = 'none';
+        messageEl.textContent = 'This invite link is missing its token. Please use the link from your email.';
+        messageEl.style.color = '#d70010';
+        messageEl.style.display = 'block';
+        return;
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const username = document.getElementById('ai-username').value.trim();
+        const password = document.getElementById('ai-password').value;
+        const confirm = document.getElementById('ai-confirm').value;
+        if (password !== confirm) {
+          messageEl.textContent = 'Passwords do not match.';
+          messageEl.style.color = '#d70010';
+          messageEl.style.display = 'block';
+          return;
+        }
+        try {
+          const res = await fetch('/api/accept-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, username, password }),
+          });
+          const body = await res.json();
+          if (!res.ok) {
+            messageEl.textContent = body.error || 'Unable to accept invite.';
+            messageEl.style.color = '#d70010';
+            messageEl.style.display = 'block';
+            return;
+          }
+          form.style.display = 'none';
+          messageEl.innerHTML = 'Account created. <a href="/login">Log in</a>.';
+          messageEl.style.color = '#1a7a1a';
+          messageEl.style.display = 'block';
+        } catch (err) {
+          messageEl.textContent = 'Something went wrong. Please try again.';
+          messageEl.style.color = '#d70010';
+          messageEl.style.display = 'block';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

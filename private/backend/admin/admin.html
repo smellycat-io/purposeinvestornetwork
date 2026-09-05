@@ -21,6 +21,7 @@
     <button class="tab-btn" data-tab="press" type="button">Press</button>
     <button class="tab-btn" data-tab="investments-events" type="button">Investments &amp; Events</button>
     <button class="tab-btn" data-tab="settings" type="button">Settings</button>
+    <button class="tab-btn" data-tab="users" type="button">Users</button>
   </nav>
 
   <section id="tab-survey" class="tab-panel active">
@@ -409,6 +410,26 @@
         </form>
       </div>
     </div>
+  </section>
+
+  <section id="tab-users" class="tab-panel">
+    <div class="panel-header">
+      <h2>Users</h2>
+      <p class="muted">Invite teammates to the admin dashboard.</p>
+    </div>
+    <form id="invite-form" class="card form-card">
+      <label class="field">
+        <span>Email address</span>
+        <input type="email" id="invite-email" required>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-accent">Send Invite</button>
+      </div>
+    </form>
+    <table class="data-table">
+      <thead><tr><th>Username</th><th>Email</th><th>Status</th><th>Created</th><th></th></tr></thead>
+      <tbody id="users-rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+    </table>
   </section>
 </div>
 

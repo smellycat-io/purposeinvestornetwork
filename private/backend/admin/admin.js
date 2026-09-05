@@ -197,6 +197,7 @@
         if (btn.dataset.tab === 'press') loadPressTab();
         if (btn.dataset.tab === 'investments-events') loadInvestmentsEventsTab();
         if (btn.dataset.tab === 'settings') loadSettingsTab();
+        if (btn.dataset.tab === 'users') loadUsersTab();
       });
     });
   }
@@ -1074,6 +1075,64 @@
     document.getElementById('password-form').addEventListener('submit', savePassword);
   }
 
+  // --- Users ---
+
+  async function loadUsersTab() {
+    const tbody = document.getElementById('users-rows');
+    try {
+      const users = await api('/api/admin/users');
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No users yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = users.map((u) => `
+        <tr data-id="${escapeHtml(u.id)}">
+          <td>${escapeHtml(u.username || '—')}</td>
+          <td>${escapeHtml(u.email)}</td>
+          <td>${escapeHtml(u.status)}</td>
+          <td>${escapeHtml(u.createdAt)}</td>
+          <td><button class="btn-small danger" data-action="delete-user" type="button">Remove</button></td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">Failed to load users.</td></tr>';
+      showToast(err.message, true);
+    }
+  }
+
+  async function sendInvite(event) {
+    event.preventDefault();
+    const email = document.getElementById('invite-email').value.trim();
+    try {
+      const result = await api('/api/admin/users/invite', { method: 'POST', body: JSON.stringify({ email }) });
+      showToast(result.emailed ? 'Invite sent.' : 'Invite created, but the email failed to send.', !result.emailed);
+      document.getElementById('invite-form').reset();
+      await loadUsersTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function deleteUser(id) {
+    if (!confirm('Remove this user? They will no longer be able to log in.')) return;
+    try {
+      await api('/api/admin/users/' + id, { method: 'DELETE' });
+      showToast('User removed.');
+      await loadUsersTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  function initUsersTab() {
+    document.getElementById('invite-form').addEventListener('submit', sendInvite);
+    document.getElementById('users-rows').addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-action="delete-user"]');
+      if (!btn) return;
+      deleteUser(btn.closest('tr').dataset.id);
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initPostsTab();
@@ -1081,6 +1140,7 @@
     initPressTab();
     initInvestmentsEventsTab();
     initSettingsTab();
+    initUsersTab();
     loadSurvey();
   });
 })();

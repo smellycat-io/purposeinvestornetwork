@@ -5,8 +5,8 @@
 // change to Lambda's ephemeral /tmp would actually lock the admin out.
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
-const crypto = require('crypto');
 const config = require('../shared/config.js');
+const { hashPassword, verifyPassword } = require('../shared/passwords.js');
 
 const AWS_REGION = process.env.AWS_REGION || undefined;
 const SETTINGS_TABLE = process.env.AWS_SETTINGS_TABLE || null;
@@ -18,21 +18,6 @@ function getDocClient() {
     docClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: AWS_REGION }));
   }
   return docClient;
-}
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPassword(password, stored) {
-  if (!stored) return false;
-  const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
-  const candidate = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, 'hex');
-  return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
 }
 
 // Read-only access degrades gracefully when the table isn't configured

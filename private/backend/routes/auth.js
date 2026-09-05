@@ -1,7 +1,8 @@
 const { Router } = require('express');
 const { captureException, captureMessage } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
-const { checkAdminPassword, getSettings } = require('../db/settings.js');
+const { verifyPassword } = require('../shared/passwords.js');
+const { findUserByUsername } = require('../db/users.js');
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.get('/login', (req, res) => {
           <input type="password" name="password" required style="width:100%;padding:10px;margin-bottom:24px;border:1px solid #ccc;border-radius:8px;" />
           <button type="submit" style="width:100%;background:#d70010;color:#fff;border:none;padding:12px 0;border-radius:999px;font-weight:700;cursor:pointer;">Sign In</button>
         </form>
+        <p style="text-align:center;margin-top:16px;"><a href="/forgot-password.html" style="color:#666;font-size:14px;">Forgot password?</a></p>
       </body>
     </html>
   `);
@@ -30,27 +32,32 @@ router.get('/login', (req, res) => {
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    // Fetched alongside the password check (not derived from it) so a failed
-    // login can report *which* credential it was checked against — the
-    // single most useful fact for diagnosing "my password doesn't work"
-    // without ever logging the password itself.
-    const [passwordOk, settings] = await Promise.all([checkAdminPassword(password), getSettings()]);
-    const usernameOk = username === config.ADMIN_USER;
-    const checkedAgainst = settings.adminPasswordHash ? 'stored password (set via Settings tab)' : 'bootstrap ADMIN_PASS env var';
+    // Real accounts (Users table) are checked first; the bootstrap
+    // ADMIN_USER/ADMIN_PASS env pair is a permanent fallback for when the
+    // Users table is empty or unreachable, not something checked alongside
+    // a real account of the same name — reporting *which* path a login was
+    // checked against is the single most useful fact for diagnosing "my
+    // password doesn't work," without ever logging the password itself.
+    const user = await findUserByUsername(username);
+    let loginOk;
+    let checkedAgainst;
 
-    if (usernameOk && passwordOk) {
+    if (user) {
+      checkedAgainst = user.status === 'active' ? 'user account' : 'user account (invite not yet accepted)';
+      loginOk = user.status === 'active' && verifyPassword(password, user.passwordHash);
+    } else {
+      checkedAgainst = 'bootstrap ADMIN_PASS env var';
+      loginOk = username === config.ADMIN_USER && password === config.ADMIN_PASS;
+    }
+
+    if (loginOk) {
       req.session.loggedIn = true;
-      captureMessage(
-        `Admin login succeeded — username: "${username}", checked against: ${checkedAgainst}`,
-        'info'
-      );
+      if (user) req.session.userId = user.id;
+      captureMessage(`Admin login succeeded — username: "${username}", checked against: ${checkedAgainst}`, 'info');
       return res.redirect('/admin');
     }
 
-    captureMessage(
-      `Admin login failed — username: "${username}" (username matched: ${usernameOk}, password matched: ${passwordOk}), checked against: ${checkedAgainst}`,
-      'warning'
-    );
+    captureMessage(`Admin login failed — username: "${username}", checked against: ${checkedAgainst}`, 'warning');
   } catch (err) {
     captureException(err);
     return res.send('<p>Something went wrong checking your credentials. <a href="/login">Try again</a>.</p>');
