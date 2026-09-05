@@ -13,17 +13,22 @@ router.get('/login', (req, res) => {
 
   res.send(`
     <html>
-      <head><title>PIN Admin Login</title></head>
-      <body style="font-family:system-ui, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; background:#f5f3ef; margin:0;">
-        <form method="POST" action="/login" style="background:#ffffff; padding:32px; border-radius:16px; box-shadow:0 16px 40px rgba(0,0,0,0.08); width:320px;">
-          <h1 style="margin-bottom:20px;font-size:22px;">Admin Login</h1>
-          <label style="display:block; margin-bottom:10px; font-weight:600;">Username</label>
-          <input name="username" required style="width:100%;padding:10px;margin-bottom:16px;border:1px solid #ccc;border-radius:8px;" />
-          <label style="display:block; margin-bottom:10px; font-weight:600;">Password</label>
-          <input type="password" name="password" required style="width:100%;padding:10px;margin-bottom:24px;border:1px solid #ccc;border-radius:8px;" />
-          <button type="submit" style="width:100%;background:#d70010;color:#fff;border:none;padding:12px 0;border-radius:999px;font-weight:700;cursor:pointer;">Sign In</button>
-        </form>
-        <p style="text-align:center;margin-top:16px;"><a href="/forgot-password.html" style="color:#666;font-size:14px;">Forgot password?</a></p>
+      <head>
+        <title>PIN Admin Login</title>
+        <link rel="stylesheet" href="/auth-card.css" />
+      </head>
+      <body class="auth-body">
+        <div class="auth-card">
+          <h1>Admin Login</h1>
+          <form method="POST" action="/login">
+            <label>Username</label>
+            <input name="username" required />
+            <label>Password</label>
+            <input type="password" name="password" required />
+            <button type="submit">Sign In</button>
+          </form>
+        </div>
+        <p class="auth-link"><a href="/forgot-password.html">Forgot password?</a></p>
       </body>
     </html>
   `);

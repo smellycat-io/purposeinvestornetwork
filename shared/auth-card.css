@@ -1,0 +1,80 @@
+/* Shared styling for standalone auth pages (login, forgot-password,
+   reset-password, accept-invite) — a single centered white card, not part
+   of the main site's nav/page-shell since these aren't public content
+   pages. Centralized here so the same visual doesn't get copy-pasted
+   inline across every one of these pages. */
+body.auth-body {
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #f5f3ef;
+  margin: 0;
+}
+
+.auth-card {
+  background: #ffffff;
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+  width: 340px;
+  box-sizing: border-box;
+}
+
+.auth-card h1 {
+  margin: 0 0 20px;
+  font-size: 22px;
+}
+
+.auth-card label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.auth-card input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 16px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.auth-card button[type="submit"] {
+  width: 100%;
+  background: #d70010;
+  color: #fff;
+  border: none;
+  padding: 12px 0;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.auth-card .auth-intro {
+  margin: 0 0 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+.auth-card .auth-link {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.auth-card .auth-link a {
+  color: #666;
+}
+
+.auth-card .auth-message {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.auth-card .auth-message.error { color: #d70010; }
+.auth-card .auth-message.success { color: #1a7a1a; }

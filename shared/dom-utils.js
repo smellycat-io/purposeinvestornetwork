@@ -11,13 +11,19 @@ function formatDate(iso) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
+async function fetchJson(url, options) {
+  const res = await fetch(url, options);
   if (!res.ok) {
-    const error = new Error(`Request to ${url} failed with ${res.status}`);
+    let message = `Request to ${url} failed with ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && body.error) message = body.error;
+    } catch (_) { /* response wasn't JSON — keep the generic message */ }
+    const error = new Error(message);
     error.status = res.status;
     throw error;
   }
+  if (res.status === 204) return null;
   return res.json();
 }
 
