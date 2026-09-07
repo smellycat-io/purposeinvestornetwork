@@ -19,4 +19,9 @@ module.exports = {
   // be a verified sender identity in the AWS account's SES setup.
   NOTIFY_EMAIL: process.env.NOTIFY_EMAIL || null,
   SES_FROM_EMAIL: process.env.SES_FROM_EMAIL || null,
+  // The public-facing site URL, used to build links in emails (invites,
+  // password resets). Can't be derived from the request — CloudFront's
+  // origin-request policy replaces the Host header with the API Gateway's
+  // own domain before forwarding, so req.get('host') sees the wrong thing.
+  SITE_URL: process.env.SITE_URL || null,
 };

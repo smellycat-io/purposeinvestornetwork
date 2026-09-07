@@ -1,5 +1,6 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
+const config = require('../shared/config.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { sendEmail } = require('../shared/email.js');
@@ -17,8 +18,11 @@ const router = Router();
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// SITE_URL is authoritative in deployed environments (see shared/config.js
+// for why the request's Host header can't be trusted behind CloudFront);
+// falling back to it lets local dev keep working without setting it.
 function siteUrl(req) {
-  return `${req.protocol}://${req.get('host')}`;
+  return config.SITE_URL || `${req.protocol}://${req.get('host')}`;
 }
 
 // --- Admin-only: manage users ---
