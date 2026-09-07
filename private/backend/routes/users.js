@@ -5,7 +5,6 @@ const { asyncRoute } = require('../shared/asyncRoute.js');
 const { sendEmail } = require('../shared/email.js');
 const {
   listUsers,
-  findUserByUsername,
   findUserByEmail,
   createInvite,
   acceptInvite,
@@ -49,7 +48,7 @@ router.post(
     const emailed = await sendEmail(
       email,
       'You’ve been invited to the Purpose Investor Network admin dashboard',
-      `You've been invited to join the PIN admin dashboard. Set up your username and password here:\n\n${link}\n\nThis link expires in 7 days.`
+      `You've been invited to join the PIN admin dashboard. Set up your account here:\n\n${link}\n\nThis link expires in 7 days.`
     );
 
     captureMessage(`User invited — email: "${email}", id: ${user.id}, emailed: ${emailed}`, 'info');
@@ -72,21 +71,21 @@ router.delete(
 router.post(
   '/api/accept-invite',
   asyncRoute(async (req, res) => {
-    const { token, username, password } = req.body || {};
-    const cleanUsername = String(username || '').trim();
-    if (!token || !cleanUsername || !password || String(password).length < 8) {
-      return res.status(400).json({ error: 'Username and a password of at least 8 characters are required.' });
-    }
-    if (await findUserByUsername(cleanUsername)) {
-      return res.status(400).json({ error: 'That username is already taken.' });
+    const { token, password } = req.body || {};
+    const firstName = String((req.body || {}).firstName || '').trim();
+    const lastName = String((req.body || {}).lastName || '').trim();
+    const phone = String((req.body || {}).phone || '').trim();
+    const address = String((req.body || {}).address || '').trim();
+    if (!token || !firstName || !lastName || !password || String(password).length < 8) {
+      return res.status(400).json({ error: 'First name, last name, and a password of at least 8 characters are required.' });
     }
 
-    const result = await acceptInvite(token, cleanUsername, password);
+    const result = await acceptInvite(token, { firstName, lastName, phone, address, password });
     if (result.error) {
       captureMessage('Invite acceptance rejected — invalid or expired token.', 'warning');
       return res.status(400).json({ error: 'This invite link is invalid or has expired.' });
     }
-    captureMessage(`Invite accepted — username: "${cleanUsername}", id: ${result.user.id}`, 'info');
+    captureMessage(`Invite accepted — email: "${result.user.email}", id: ${result.user.id}`, 'info');
     res.json({ success: true });
   }, 'Unable to accept invite.')
 );

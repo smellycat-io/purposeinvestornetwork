@@ -1082,20 +1082,24 @@
     try {
       const users = await api('/api/admin/users');
       if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="muted">No users yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">No users yet.</td></tr>';
         return;
       }
-      tbody.innerHTML = users.map((u) => `
+      tbody.innerHTML = users.map((u) => {
+        const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
+        return `
         <tr data-id="${escapeHtml(u.id)}">
-          <td>${escapeHtml(u.username || '—')}</td>
+          <td>${escapeHtml(name || '—')}</td>
           <td>${escapeHtml(u.email)}</td>
+          <td>${escapeHtml(u.phone || '—')}</td>
           <td>${escapeHtml(u.status)}</td>
           <td>${escapeHtml(u.createdAt)}</td>
           <td><button class="btn-small danger" data-action="delete-user" type="button">Remove</button></td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     } catch (err) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">Failed to load users.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="muted">Failed to load users.</td></tr>';
       showToast(err.message, true);
     }
   }

@@ -1,6 +1,7 @@
-// Admin user accounts — invites, login lookup, and password reset. Small
-// table (a handful of PIN staff), so scan-all matches the convention already
-// used by content.js/settings.js rather than needing a username/email index.
+// Admin user accounts — invites, login lookup, and password reset. Email is
+// the login identity (no separate username). Small table (a handful of PIN
+// staff), so scan-all matches the convention already used by
+// content.js/settings.js rather than needing an email index.
 //
 // Invite and reset tokens are generated as high-entropy random hex, emailed
 // as the raw value, but only their SHA-256 hash is ever stored here — a
@@ -45,8 +46,11 @@ async function listUsers() {
   const result = await getDocClient().send(new ScanCommand({ TableName: USERS_TABLE }));
   return (result.Items || []).map((u) => ({
     id: u.id,
-    username: u.username,
     email: u.email,
+    firstName: u.firstName || null,
+    lastName: u.lastName || null,
+    phone: u.phone || null,
+    address: u.address || null,
     status: u.status,
     createdAt: u.createdAt,
   }));
@@ -56,11 +60,6 @@ async function getUserById(id) {
   if (!USERS_TABLE) return null;
   const result = await getDocClient().send(new GetCommand({ TableName: USERS_TABLE, Key: { id } }));
   return result.Item || null;
-}
-
-async function findUserByUsername(username) {
-  const items = await listAllRaw();
-  return items.find((u) => u.username && u.username.toLowerCase() === String(username || '').toLowerCase()) || null;
 }
 
 async function findUserByEmail(email) {
@@ -74,8 +73,8 @@ async function listAllRaw() {
   return result.Items || [];
 }
 
-// Creates a pending invite. Username is deliberately not set here — the
-// invitee picks their own when they accept.
+// Creates a pending invite. Personal info is deliberately not set here —
+// the invitee fills it in themselves when they accept.
 async function createInvite(email) {
   const token = makeToken();
   const item = {
@@ -91,7 +90,7 @@ async function createInvite(email) {
   return { user: item, token };
 }
 
-async function acceptInvite(token, username, password) {
+async function acceptInvite(token, { firstName, lastName, phone, address, password }) {
   const candidateHash = hashToken(token);
   const items = await listAllRaw();
   const user = items.find((u) => u.status === 'pending' && tokenMatches(candidateHash, u.inviteTokenHash));
@@ -100,7 +99,10 @@ async function acceptInvite(token, username, password) {
 
   const item = {
     ...user,
-    username,
+    firstName,
+    lastName,
+    phone: phone || null,
+    address: address || null,
     passwordHash: hashPassword(password),
     status: 'active',
     inviteTokenHash: null,
@@ -159,17 +161,9 @@ async function deleteUser(id) {
   await getDocClient().send(new DeleteCommand({ TableName: USERS_TABLE, Key: { id } }));
 }
 
-async function verifyLogin(username, password) {
-  const user = await findUserByUsername(username);
-  if (!user || user.status !== 'active') return null;
-  if (!verifyPassword(password, user.passwordHash)) return null;
-  return user;
-}
-
 module.exports = {
   listUsers,
   getUserById,
-  findUserByUsername,
   findUserByEmail,
   createInvite,
   acceptInvite,
@@ -177,6 +171,4 @@ module.exports = {
   resetPassword,
   updateOwnPassword,
   deleteUser,
-  verifyLogin,
-  hashToken,
 };

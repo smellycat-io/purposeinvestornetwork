@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { captureException, captureMessage } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
 const { verifyPassword } = require('../shared/passwords.js');
-const { findUserByUsername } = require('../db/users.js');
+const { findUserByEmail } = require('../db/users.js');
 
 const router = Router();
 
@@ -21,8 +21,8 @@ router.get('/login', (req, res) => {
         <div class="auth-card">
           <h1>Admin Login</h1>
           <form method="POST" action="/login">
-            <label>Username</label>
-            <input name="username" required />
+            <label>Email</label>
+            <input type="email" name="email" required />
             <label>Password</label>
             <input type="password" name="password" required />
             <button type="submit">Sign In</button>
@@ -35,15 +35,16 @@ router.get('/login', (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const { password } = req.body;
   try {
     // Real accounts (Users table) are checked first; the bootstrap
     // ADMIN_USER/ADMIN_PASS env pair is a permanent fallback for when the
     // Users table is empty or unreachable, not something checked alongside
-    // a real account of the same name — reporting *which* path a login was
-    // checked against is the single most useful fact for diagnosing "my
+    // a real account of the same address — reporting *which* path a login
+    // was checked against is the single most useful fact for diagnosing "my
     // password doesn't work," without ever logging the password itself.
-    const user = await findUserByUsername(username);
+    const user = await findUserByEmail(email);
     let loginOk;
     let checkedAgainst;
 
@@ -52,17 +53,17 @@ router.post('/login', async (req, res) => {
       loginOk = user.status === 'active' && verifyPassword(password, user.passwordHash);
     } else {
       checkedAgainst = 'bootstrap ADMIN_PASS env var';
-      loginOk = username === config.ADMIN_USER && password === config.ADMIN_PASS;
+      loginOk = email === config.ADMIN_USER && password === config.ADMIN_PASS;
     }
 
     if (loginOk) {
       req.session.loggedIn = true;
       if (user) req.session.userId = user.id;
-      captureMessage(`Admin login succeeded — username: "${username}", checked against: ${checkedAgainst}`, 'info');
+      captureMessage(`Admin login succeeded — email: "${email}", checked against: ${checkedAgainst}`, 'info');
       return res.redirect('/admin');
     }
 
-    captureMessage(`Admin login failed — username: "${username}", checked against: ${checkedAgainst}`, 'warning');
+    captureMessage(`Admin login failed — email: "${email}", checked against: ${checkedAgainst}`, 'warning');
   } catch (err) {
     captureException(err);
     return res.send('<p>Something went wrong checking your credentials. <a href="/login">Try again</a>.</p>');

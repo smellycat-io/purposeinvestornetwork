@@ -12,8 +12,14 @@
     <h1>Set up your account</h1>
 
     <form id="ai-form">
-      <label>Username</label>
-      <input id="ai-username" required />
+      <label>First name</label>
+      <input id="ai-first-name" required />
+      <label>Last name</label>
+      <input id="ai-last-name" required />
+      <label>Phone</label>
+      <input type="tel" id="ai-phone" />
+      <label>Address</label>
+      <input id="ai-address" />
       <label>Password</label>
       <input type="password" id="ai-password" required minlength="8" />
       <label>Confirm password</label>
@@ -45,7 +51,10 @@
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const username = document.getElementById('ai-username').value.trim();
+        const firstName = document.getElementById('ai-first-name').value.trim();
+        const lastName = document.getElementById('ai-last-name').value.trim();
+        const phone = document.getElementById('ai-phone').value.trim();
+        const address = document.getElementById('ai-address').value.trim();
         const password = document.getElementById('ai-password').value;
         const confirm = document.getElementById('ai-confirm').value;
         if (password !== confirm) {
@@ -56,7 +65,7 @@
           await fetchJson('/api/accept-invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, username, password }),
+            body: JSON.stringify({ token, firstName, lastName, phone, address, password }),
           });
           form.hidden = true;
           showMessage('Account created. <a href="/login">Log in</a>.', 'success');
