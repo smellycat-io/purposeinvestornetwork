@@ -22,7 +22,7 @@ router.get('/login', (req, res) => {
           <h1>Admin Login</h1>
           <form method="POST" action="/login">
             <label>Email</label>
-            <input type="email" name="email" required />
+            <input type="text" name="email" required />
             <label>Password</label>
             <input type="password" name="password" required />
             <button type="submit">Sign In</button>
