@@ -5,3 +5,8 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+
+# Build artifacts — deploy.yml builds this fresh on every run, never a
+# source file worth committing.
+private/dist/
+*.zip
