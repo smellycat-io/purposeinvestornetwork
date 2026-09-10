@@ -1,22 +1,12 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
-const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { filterVisible, canSeeFull } = require('../shared/access.js');
+const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
 
 const router = Router();
-
-function sanitizeRichText(html) {
-  return sanitizeHtml(html || '', {
-    allowedTags: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote', 'img'],
-    allowedAttributes: {
-      a: ['href', 'target', 'rel'],
-      img: ['src', 'alt'],
-    },
-  });
-}
 
 router.get(
   '/api/events',
