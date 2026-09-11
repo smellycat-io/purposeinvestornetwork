@@ -8,12 +8,6 @@
     press: [],
     investments: [],
     events: [],
-    editingPostId: null,
-    editingRoundtableId: null,
-    editingInitiativeId: null,
-    editingPressId: null,
-    editingInvestmentId: null,
-    editingEventId: null,
   };
 
   const POST_TYPES_WITH_MEMBER_ONLY = ['education'];
@@ -58,6 +52,96 @@
     }
     if (response.status === 204) return null;
     return response.json();
+  }
+
+  // --- Generic CRUD panel ---
+  //
+  // Every content panel (Posts, Roundtables, Initiatives, Press,
+  // Investments, Events) is the same skeleton: a toggle-hidden `<prefix>-form`
+  // with `<prefix>-new-btn`/`<prefix>-cancel-btn`, a `<listId>` of
+  // `.list-item[data-id]` rows with edit/delete buttons, and
+  // create-or-update-on-submit. The only genuine per-panel logic is
+  // buildPayload (form → API body), populateForm (item → form, or clear when
+  // null), and renderItem (item → one row's HTML). Panel-specific extras
+  // (Quill, roundtable checkboxes, datetime conversion) live in those
+  // closures, not here.
+  function createCrudPanel(config) {
+    const { idPrefix, endpoint, listId, entityLabel, emptyMessage, deleteConfirm,
+      getItems, buildPayload, populateForm, renderItem, reload } = config;
+
+    let editingId = null;
+    const formEl = () => document.getElementById(idPrefix + '-form');
+
+    function open(item) {
+      const f = formEl();
+      if (f) f.classList.remove('hidden');
+      editingId = item ? item.id : null;
+      populateForm(item || null);
+    }
+
+    function reset() {
+      editingId = null;
+      populateForm(null);
+      const f = formEl();
+      if (f) f.classList.add('hidden');
+    }
+
+    async function save(event) {
+      event.preventDefault();
+      const payload = buildPayload();
+      try {
+        if (editingId) {
+          await api(endpoint + '/' + editingId, { method: 'PUT', body: JSON.stringify(payload) });
+          showToast(entityLabel + ' updated.');
+        } else {
+          await api(endpoint, { method: 'POST', body: JSON.stringify(payload) });
+          showToast(entityLabel + ' created.');
+        }
+        reset();
+        await reload();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    async function remove(id) {
+      if (!confirm(deleteConfirm)) return;
+      try {
+        await api(endpoint + '/' + id, { method: 'DELETE' });
+        showToast(entityLabel + ' deleted.');
+        await reload();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    function renderList() {
+      const list = document.getElementById(listId);
+      const items = getItems();
+      list.innerHTML = items.length
+        ? items.map(renderItem).join('')
+        : `<p class="muted">${emptyMessage}</p>`;
+    }
+
+    function init() {
+      document.getElementById(idPrefix + '-new-btn').addEventListener('click', () => open(null));
+      const cancelBtn = document.getElementById(idPrefix + '-cancel-btn');
+      if (cancelBtn) cancelBtn.addEventListener('click', reset);
+      const f = formEl();
+      if (f) f.addEventListener('submit', save);
+      document.getElementById(listId).addEventListener('click', (event) => {
+        const btn = event.target.closest('button[data-action]');
+        if (!btn) return;
+        const id = btn.closest('.list-item').dataset.id;
+        if (btn.dataset.action === 'edit-' + idPrefix) {
+          open(getItems().find((x) => x.id === id));
+        } else if (btn.dataset.action === 'delete-' + idPrefix) {
+          remove(id);
+        }
+      });
+    }
+
+    return { init, renderList };
   }
 
   // --- Image uploads ---
@@ -266,57 +350,6 @@
       POST_TYPES_WITH_BOOK_FIELDS.includes(type) ? 'flex' : 'none';
   }
 
-  function resetPostForm() {
-    state.editingPostId = null;
-    document.getElementById('post-id').value = '';
-    document.getElementById('post-title').value = '';
-    document.getElementById('post-author').value = '';
-    document.getElementById('post-type').value = 'blog';
-    document.getElementById('post-member-only').checked = false;
-    document.getElementById('post-excerpt').value = '';
-    document.getElementById('post-purchase-url').value = '';
-    document.getElementById('post-price').value = '';
-    setImagePreview('post', null);
-    updatePostFieldVisibility();
-    getQuill().setContents([]);
-    document.getElementById('post-form').classList.add('hidden');
-  }
-
-  function openPostForm(post) {
-    getQuill();
-    document.getElementById('post-form').classList.remove('hidden');
-    if (post) {
-      state.editingPostId = post.id;
-      document.getElementById('post-id').value = post.id;
-      document.getElementById('post-title').value = post.title;
-      document.getElementById('post-author').value = post.author || '';
-      document.getElementById('post-type').value = post.type;
-      document.getElementById('post-member-only').checked = !!post.memberOnly;
-      document.getElementById('post-excerpt').value = post.excerpt || '';
-      document.getElementById('post-purchase-url').value = post.purchaseUrl || '';
-      document.getElementById('post-price').value = post.price || '';
-      setImagePreview('post', post.imageUrl || null);
-      updatePostFieldVisibility();
-      if (post.type === 'update' && post.initiativeId) {
-        document.getElementById('post-initiative').value = post.initiativeId;
-      }
-      quill.root.innerHTML = post.body || '';
-    } else {
-      state.editingPostId = null;
-      document.getElementById('post-id').value = '';
-      document.getElementById('post-title').value = '';
-      document.getElementById('post-author').value = '';
-      document.getElementById('post-type').value = 'blog';
-      document.getElementById('post-member-only').checked = false;
-      document.getElementById('post-excerpt').value = '';
-      document.getElementById('post-purchase-url').value = '';
-      document.getElementById('post-price').value = '';
-      setImagePreview('post', null);
-      updatePostFieldVisibility();
-      quill.setContents([]);
-    }
-  }
-
   const POST_TYPE_LABELS = {
     blog: 'Blog',
     update: 'Update',
@@ -325,34 +358,75 @@
     book: 'Book',
   };
 
-  function renderPosts() {
-    const list = document.getElementById('posts-list');
-    if (!state.posts.length) {
-      list.innerHTML = '<p class="muted">No posts yet.</p>';
-      return;
-    }
-    const initiativeName = (id) => {
-      const found = state.initiatives.find((i) => i.id === id);
-      return found ? found.title : 'Unknown initiative';
-    };
-    list.innerHTML = state.posts.map((post) => `
-      <div class="list-item" data-id="${escapeHtml(post.id)}">
-        <div class="list-item-body">
-          <h3>
-            <span class="badge">${escapeHtml(POST_TYPE_LABELS[post.type] || post.type)}</span>
-            ${post.memberOnly ? '<span class="badge">Members only</span>' : ''}
-            ${escapeHtml(post.title)}
-          </h3>
-          <p>${post.type === 'update' ? escapeHtml(initiativeName(post.initiativeId)) + ' · ' : ''}${escapeHtml(post.author || 'Unknown author')} · ${escapeHtml(post.publishedAt)}</p>
-          <p>${escapeHtml(stripHtml(post.body).slice(0, 140))}${stripHtml(post.body).length > 140 ? '…' : ''}</p>
+  const postsPanel = createCrudPanel({
+    idPrefix: 'post',
+    endpoint: '/api/admin/posts',
+    listId: 'posts-list',
+    entityLabel: 'Post',
+    emptyMessage: 'No posts yet.',
+    deleteConfirm: 'Delete this post? This cannot be undone.',
+    reload: () => loadPostsTab(),
+    getItems: () => state.posts,
+    buildPayload: () => {
+      const type = document.getElementById('post-type').value;
+      return {
+        title: document.getElementById('post-title').value.trim(),
+        author: document.getElementById('post-author').value.trim(),
+        type,
+        initiativeId: type === 'update' ? document.getElementById('post-initiative').value : null,
+        body: getQuill().root.innerHTML,
+        memberOnly: document.getElementById('post-member-only').checked,
+        excerpt: document.getElementById('post-excerpt').value.trim() || null,
+        imageUrl: document.getElementById('post-image-url').value || null,
+        purchaseUrl: document.getElementById('post-purchase-url').value.trim() || null,
+        price: document.getElementById('post-price').value.trim() || null,
+      };
+    },
+    populateForm: (post) => {
+      getQuill();
+      document.getElementById('post-id').value = post ? post.id : '';
+      document.getElementById('post-title').value = post ? post.title : '';
+      document.getElementById('post-author').value = post ? post.author || '' : '';
+      document.getElementById('post-type').value = post ? post.type : 'blog';
+      document.getElementById('post-member-only').checked = post ? !!post.memberOnly : false;
+      document.getElementById('post-excerpt').value = post ? post.excerpt || '' : '';
+      document.getElementById('post-purchase-url').value = post ? post.purchaseUrl || '' : '';
+      document.getElementById('post-price').value = post ? post.price || '' : '';
+      setImagePreview('post', post ? post.imageUrl || null : null);
+      updatePostFieldVisibility();
+      if (post && post.type === 'update' && post.initiativeId) {
+        document.getElementById('post-initiative').value = post.initiativeId;
+      }
+      if (post) {
+        quill.root.innerHTML = post.body || '';
+      } else {
+        quill.setContents([]);
+      }
+    },
+    renderItem: (post) => {
+      const initiativeName = (id) => {
+        const found = state.initiatives.find((i) => i.id === id);
+        return found ? found.title : 'Unknown initiative';
+      };
+      return `
+        <div class="list-item" data-id="${escapeHtml(post.id)}">
+          <div class="list-item-body">
+            <h3>
+              <span class="badge">${escapeHtml(POST_TYPE_LABELS[post.type] || post.type)}</span>
+              ${post.memberOnly ? '<span class="badge">Members only</span>' : ''}
+              ${escapeHtml(post.title)}
+            </h3>
+            <p>${post.type === 'update' ? escapeHtml(initiativeName(post.initiativeId)) + ' · ' : ''}${escapeHtml(post.author || 'Unknown author')} · ${escapeHtml(post.publishedAt)}</p>
+            <p>${escapeHtml(stripHtml(post.body).slice(0, 140))}${stripHtml(post.body).length > 140 ? '…' : ''}</p>
+          </div>
+          <div class="list-item-actions">
+            <button class="btn-small" data-action="edit-post" type="button">Edit</button>
+            <button class="btn-small danger" data-action="delete-post" type="button">Delete</button>
+          </div>
         </div>
-        <div class="list-item-actions">
-          <button class="btn-small" data-action="edit-post" type="button">Edit</button>
-          <button class="btn-small danger" data-action="delete-post" type="button">Delete</button>
-        </div>
-      </div>
-    `).join('');
-  }
+      `;
+    },
+  });
 
   async function loadPostsTab() {
     try {
@@ -363,147 +437,22 @@
       state.posts = posts;
       state.initiatives = initiatives;
       populateInitiativeSelect();
-      renderPosts();
+      postsPanel.renderList();
     } catch (err) {
       document.getElementById('posts-list').innerHTML = '<p class="muted">Failed to load posts.</p>';
       showToast(err.message, true);
     }
   }
 
-  async function savePost(event) {
-    event.preventDefault();
-    const type = document.getElementById('post-type').value;
-    const payload = {
-      title: document.getElementById('post-title').value.trim(),
-      author: document.getElementById('post-author').value.trim(),
-      type,
-      initiativeId: type === 'update' ? document.getElementById('post-initiative').value : null,
-      body: getQuill().root.innerHTML,
-      memberOnly: document.getElementById('post-member-only').checked,
-      excerpt: document.getElementById('post-excerpt').value.trim() || null,
-      imageUrl: document.getElementById('post-image-url').value || null,
-      purchaseUrl: document.getElementById('post-purchase-url').value.trim() || null,
-      price: document.getElementById('post-price').value.trim() || null,
-    };
-    try {
-      if (state.editingPostId) {
-        await api('/api/admin/posts/' + state.editingPostId, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('Post updated.');
-      } else {
-        await api('/api/admin/posts', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Post created.');
-      }
-      resetPostForm();
-      await loadPostsTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function deletePost(id) {
-    if (!confirm('Delete this post? This cannot be undone.')) return;
-    try {
-      await api('/api/admin/posts/' + id, { method: 'DELETE' });
-      showToast('Post deleted.');
-      await loadPostsTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
   function initPostsTab() {
-    document.getElementById('post-new-btn').addEventListener('click', () => openPostForm(null));
-    document.getElementById('post-cancel-btn').addEventListener('click', resetPostForm);
+    postsPanel.init();
     document.getElementById('post-type').addEventListener('change', updatePostFieldVisibility);
-    document.getElementById('post-form').addEventListener('submit', savePost);
-    document.getElementById('posts-list').addEventListener('click', (event) => {
-      const btn = event.target.closest('button[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.list-item').dataset.id;
-      if (btn.dataset.action === 'edit-post') {
-        openPostForm(state.posts.find((p) => p.id === id));
-      } else if (btn.dataset.action === 'delete-post') {
-        deletePost(id);
-      }
-    });
   }
 
   // --- Roundtables & Initiatives ---
 
-  function resetRoundtableForm() {
-    state.editingRoundtableId = null;
-    document.getElementById('roundtable-id').value = '';
-    document.getElementById('roundtable-name').value = '';
-    document.getElementById('roundtable-description').value = '';
-    setImagePreview('roundtable', null);
-    document.getElementById('roundtable-form').classList.add('hidden');
-  }
-
-  function openRoundtableForm(roundtable) {
-    document.getElementById('roundtable-form').classList.remove('hidden');
-    state.editingRoundtableId = roundtable ? roundtable.id : null;
-    document.getElementById('roundtable-id').value = roundtable ? roundtable.id : '';
-    document.getElementById('roundtable-name').value = roundtable ? roundtable.name : '';
-    document.getElementById('roundtable-description').value = roundtable ? roundtable.description || '' : '';
-    setImagePreview('roundtable', roundtable ? roundtable.imageUrl : null);
-  }
-
-  function renderRoundtables() {
-    const list = document.getElementById('roundtables-list');
-    if (!state.roundtables.length) {
-      list.innerHTML = '<p class="muted">No roundtables yet.</p>';
-      return;
-    }
-    list.innerHTML = state.roundtables.map((rt) => `
-      <div class="list-item" data-id="${escapeHtml(rt.id)}">
-        ${rt.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(rt.imageUrl)}" alt="">` : ''}
-        <div class="list-item-body">
-          <h3>${escapeHtml(rt.name)}</h3>
-          <p>${escapeHtml(rt.description || '')}</p>
-        </div>
-        <div class="list-item-actions">
-          <button class="btn-small" data-action="edit-roundtable" type="button">Edit</button>
-          <button class="btn-small danger" data-action="delete-roundtable" type="button">Delete</button>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  async function saveRoundtable(event) {
-    event.preventDefault();
-    const payload = {
-      name: document.getElementById('roundtable-name').value.trim(),
-      description: document.getElementById('roundtable-description').value.trim(),
-      imageUrl: document.getElementById('roundtable-image-url').value || null,
-    };
-    try {
-      if (state.editingRoundtableId) {
-        await api('/api/admin/roundtables/' + state.editingRoundtableId, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('Roundtable updated.');
-      } else {
-        await api('/api/admin/roundtables', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Roundtable created.');
-      }
-      resetRoundtableForm();
-      await loadContentTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function deleteRoundtable(id) {
-    if (!confirm('Delete this roundtable? Initiatives linked to it will keep their link until edited.')) return;
-    try {
-      await api('/api/admin/roundtables/' + id, { method: 'DELETE' });
-      showToast('Roundtable deleted.');
-      await loadContentTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  function renderRoundtableChecks(selectedIds) {
-    const container = document.getElementById('initiative-roundtable-checks');
+  function renderRoundtableChecks(containerId, selectedIds) {
+    const container = document.getElementById(containerId);
     const selected = new Set(selectedIds || []);
     if (!state.roundtables.length) {
       container.innerHTML = '<span class="muted">No roundtables yet — create one first.</span>';
@@ -517,86 +466,84 @@
     `).join('');
   }
 
-  function resetInitiativeForm() {
-    state.editingInitiativeId = null;
-    document.getElementById('initiative-id').value = '';
-    document.getElementById('initiative-title').value = '';
-    document.getElementById('initiative-description').value = '';
-    renderRoundtableChecks([]);
-    setImagePreview('initiative', null);
-    document.getElementById('initiative-form').classList.add('hidden');
-  }
-
-  function openInitiativeForm(initiative) {
-    document.getElementById('initiative-form').classList.remove('hidden');
-    state.editingInitiativeId = initiative ? initiative.id : null;
-    document.getElementById('initiative-id').value = initiative ? initiative.id : '';
-    document.getElementById('initiative-title').value = initiative ? initiative.title : '';
-    document.getElementById('initiative-description').value = initiative ? initiative.description || '' : '';
-    renderRoundtableChecks(initiative ? initiative.roundtableIds : []);
-    setImagePreview('initiative', initiative ? initiative.imageUrl : null);
-  }
-
-  function renderInitiatives() {
-    const list = document.getElementById('initiatives-list');
-    if (!state.initiatives.length) {
-      list.innerHTML = '<p class="muted">No initiatives yet.</p>';
-      return;
-    }
-    const roundtableNames = (ids) => (ids || [])
-      .map((id) => (state.roundtables.find((rt) => rt.id === id) || {}).name)
-      .filter(Boolean)
-      .join(', ') || 'No roundtables linked';
-    list.innerHTML = state.initiatives.map((initiative) => `
-      <div class="list-item" data-id="${escapeHtml(initiative.id)}">
-        ${initiative.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(initiative.imageUrl)}" alt="">` : ''}
+  const roundtablesPanel = createCrudPanel({
+    idPrefix: 'roundtable',
+    endpoint: '/api/admin/roundtables',
+    listId: 'roundtables-list',
+    entityLabel: 'Roundtable',
+    emptyMessage: 'No roundtables yet.',
+    deleteConfirm: 'Delete this roundtable? Initiatives linked to it will keep their link until edited.',
+    reload: () => loadContentTab(),
+    getItems: () => state.roundtables,
+    buildPayload: () => ({
+      name: document.getElementById('roundtable-name').value.trim(),
+      description: document.getElementById('roundtable-description').value.trim(),
+      imageUrl: document.getElementById('roundtable-image-url').value || null,
+    }),
+    populateForm: (rt) => {
+      document.getElementById('roundtable-id').value = rt ? rt.id : '';
+      document.getElementById('roundtable-name').value = rt ? rt.name : '';
+      document.getElementById('roundtable-description').value = rt ? rt.description || '' : '';
+      setImagePreview('roundtable', rt ? rt.imageUrl : null);
+    },
+    renderItem: (rt) => `
+      <div class="list-item" data-id="${escapeHtml(rt.id)}">
+        ${rt.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(rt.imageUrl)}" alt="">` : ''}
         <div class="list-item-body">
-          <h3>${escapeHtml(initiative.title)}</h3>
-          <p>${escapeHtml(initiative.description || '')}</p>
-          <p>${escapeHtml(roundtableNames(initiative.roundtableIds))}</p>
+          <h3>${escapeHtml(rt.name)}</h3>
+          <p>${escapeHtml(rt.description || '')}</p>
         </div>
         <div class="list-item-actions">
-          <button class="btn-small" data-action="edit-initiative" type="button">Edit</button>
-          <button class="btn-small danger" data-action="delete-initiative" type="button">Delete</button>
+          <button class="btn-small" data-action="edit-roundtable" type="button">Edit</button>
+          <button class="btn-small danger" data-action="delete-roundtable" type="button">Delete</button>
         </div>
       </div>
-    `).join('');
-  }
+    `,
+  });
 
-  async function saveInitiative(event) {
-    event.preventDefault();
-    const roundtableIds = Array.from(document.querySelectorAll('#initiative-roundtable-checks input:checked')).map((el) => el.value);
-    const payload = {
+  const initiativesPanel = createCrudPanel({
+    idPrefix: 'initiative',
+    endpoint: '/api/admin/initiatives',
+    listId: 'initiatives-list',
+    entityLabel: 'Initiative',
+    emptyMessage: 'No initiatives yet.',
+    deleteConfirm: 'Delete this initiative? Its updates will remain but lose their initiative link.',
+    reload: () => loadContentTab(),
+    getItems: () => state.initiatives,
+    buildPayload: () => ({
       title: document.getElementById('initiative-title').value.trim(),
       description: document.getElementById('initiative-description').value.trim(),
-      roundtableIds,
+      roundtableIds: Array.from(document.querySelectorAll('#initiative-roundtable-checks input:checked')).map((el) => el.value),
       imageUrl: document.getElementById('initiative-image-url').value || null,
-    };
-    try {
-      if (state.editingInitiativeId) {
-        await api('/api/admin/initiatives/' + state.editingInitiativeId, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('Initiative updated.');
-      } else {
-        await api('/api/admin/initiatives', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Initiative created.');
-      }
-      resetInitiativeForm();
-      await loadContentTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function deleteInitiative(id) {
-    if (!confirm('Delete this initiative? Its updates will remain but lose their initiative link.')) return;
-    try {
-      await api('/api/admin/initiatives/' + id, { method: 'DELETE' });
-      showToast('Initiative deleted.');
-      await loadContentTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
+    }),
+    populateForm: (initiative) => {
+      document.getElementById('initiative-id').value = initiative ? initiative.id : '';
+      document.getElementById('initiative-title').value = initiative ? initiative.title : '';
+      document.getElementById('initiative-description').value = initiative ? initiative.description || '' : '';
+      renderRoundtableChecks('initiative-roundtable-checks', initiative ? initiative.roundtableIds : []);
+      setImagePreview('initiative', initiative ? initiative.imageUrl : null);
+    },
+    renderItem: (initiative) => {
+      const roundtableNames = (ids) => (ids || [])
+        .map((id) => (state.roundtables.find((rt) => rt.id === id) || {}).name)
+        .filter(Boolean)
+        .join(', ') || 'No roundtables linked';
+      return `
+        <div class="list-item" data-id="${escapeHtml(initiative.id)}">
+          ${initiative.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(initiative.imageUrl)}" alt="">` : ''}
+          <div class="list-item-body">
+            <h3>${escapeHtml(initiative.title)}</h3>
+            <p>${escapeHtml(initiative.description || '')}</p>
+            <p>${escapeHtml(roundtableNames(initiative.roundtableIds))}</p>
+          </div>
+          <div class="list-item-actions">
+            <button class="btn-small" data-action="edit-initiative" type="button">Edit</button>
+            <button class="btn-small danger" data-action="delete-initiative" type="button">Delete</button>
+          </div>
+        </div>
+      `;
+    },
+  });
 
   async function loadContentTab() {
     try {
@@ -606,8 +553,8 @@
       ]);
       state.roundtables = roundtables;
       state.initiatives = initiatives;
-      renderRoundtables();
-      renderInitiatives();
+      roundtablesPanel.renderList();
+      initiativesPanel.renderList();
     } catch (err) {
       showToast(err.message, true);
     }
@@ -615,67 +562,40 @@
 
   function initContentTab() {
     initImagePicker();
-
-    document.getElementById('roundtable-new-btn').addEventListener('click', () => openRoundtableForm(null));
-    document.getElementById('roundtable-cancel-btn').addEventListener('click', resetRoundtableForm);
-    document.getElementById('roundtable-form').addEventListener('submit', saveRoundtable);
-    document.getElementById('roundtables-list').addEventListener('click', (event) => {
-      const btn = event.target.closest('button[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.list-item').dataset.id;
-      if (btn.dataset.action === 'edit-roundtable') {
-        openRoundtableForm(state.roundtables.find((r) => r.id === id));
-      } else if (btn.dataset.action === 'delete-roundtable') {
-        deleteRoundtable(id);
-      }
-    });
-
-    document.getElementById('initiative-new-btn').addEventListener('click', () => openInitiativeForm(null));
-    document.getElementById('initiative-cancel-btn').addEventListener('click', resetInitiativeForm);
-    document.getElementById('initiative-form').addEventListener('submit', saveInitiative);
-    document.getElementById('initiatives-list').addEventListener('click', (event) => {
-      const btn = event.target.closest('button[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.list-item').dataset.id;
-      if (btn.dataset.action === 'edit-initiative') {
-        openInitiativeForm(state.initiatives.find((i) => i.id === id));
-      } else if (btn.dataset.action === 'delete-initiative') {
-        deleteInitiative(id);
-      }
-    });
+    roundtablesPanel.init();
+    initiativesPanel.init();
   }
 
   // --- Press ---
 
-  function resetPressForm() {
-    state.editingPressId = null;
-    document.getElementById('press-id').value = '';
-    document.getElementById('press-title').value = '';
-    document.getElementById('press-source').value = '';
-    document.getElementById('press-date').value = '';
-    document.getElementById('press-url').value = '';
-    document.getElementById('press-excerpt').value = '';
-    document.getElementById('press-form').classList.add('hidden');
-  }
-
-  function openPressForm(press) {
-    document.getElementById('press-form').classList.remove('hidden');
-    state.editingPressId = press ? press.id : null;
-    document.getElementById('press-id').value = press ? press.id : '';
-    document.getElementById('press-title').value = press ? press.title : '';
-    document.getElementById('press-source').value = press ? press.source : '';
-    document.getElementById('press-date').value = press && press.publishedDate ? press.publishedDate.slice(0, 10) : '';
-    document.getElementById('press-url').value = press ? press.externalUrl : '';
-    document.getElementById('press-excerpt').value = press ? press.excerpt || '' : '';
-  }
-
-  function renderPress() {
-    const list = document.getElementById('press-list');
-    if (!state.press.length) {
-      list.innerHTML = '<p class="muted">No press mentions yet.</p>';
-      return;
-    }
-    list.innerHTML = state.press.map((p) => `
+  const pressPanel = createCrudPanel({
+    idPrefix: 'press',
+    endpoint: '/api/admin/press',
+    listId: 'press-list',
+    entityLabel: 'Press mention',
+    emptyMessage: 'No press mentions yet.',
+    deleteConfirm: 'Delete this press mention?',
+    reload: () => loadPressTab(),
+    getItems: () => state.press,
+    buildPayload: () => {
+      const dateValue = document.getElementById('press-date').value;
+      return {
+        title: document.getElementById('press-title').value.trim(),
+        source: document.getElementById('press-source').value.trim(),
+        publishedDate: dateValue ? new Date(dateValue).toISOString() : new Date().toISOString(),
+        externalUrl: document.getElementById('press-url').value.trim(),
+        excerpt: document.getElementById('press-excerpt').value.trim() || null,
+      };
+    },
+    populateForm: (press) => {
+      document.getElementById('press-id').value = press ? press.id : '';
+      document.getElementById('press-title').value = press ? press.title : '';
+      document.getElementById('press-source').value = press ? press.source : '';
+      document.getElementById('press-date').value = press && press.publishedDate ? press.publishedDate.slice(0, 10) : '';
+      document.getElementById('press-url').value = press ? press.externalUrl : '';
+      document.getElementById('press-excerpt').value = press ? press.excerpt || '' : '';
+    },
+    renderItem: (p) => `
       <div class="list-item" data-id="${escapeHtml(p.id)}">
         <div class="list-item-body">
           <h3>${escapeHtml(p.title)}</h3>
@@ -687,69 +607,21 @@
           <button class="btn-small danger" data-action="delete-press" type="button">Delete</button>
         </div>
       </div>
-    `).join('');
-  }
+    `,
+  });
 
   async function loadPressTab() {
     try {
       state.press = await api('/api/admin/press');
-      renderPress();
+      pressPanel.renderList();
     } catch (err) {
       document.getElementById('press-list').innerHTML = '<p class="muted">Failed to load press mentions.</p>';
       showToast(err.message, true);
     }
   }
 
-  async function savePress(event) {
-    event.preventDefault();
-    const dateValue = document.getElementById('press-date').value;
-    const payload = {
-      title: document.getElementById('press-title').value.trim(),
-      source: document.getElementById('press-source').value.trim(),
-      publishedDate: dateValue ? new Date(dateValue).toISOString() : new Date().toISOString(),
-      externalUrl: document.getElementById('press-url').value.trim(),
-      excerpt: document.getElementById('press-excerpt').value.trim() || null,
-    };
-    try {
-      if (state.editingPressId) {
-        await api('/api/admin/press/' + state.editingPressId, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('Press mention updated.');
-      } else {
-        await api('/api/admin/press', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Press mention created.');
-      }
-      resetPressForm();
-      await loadPressTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function deletePress(id) {
-    if (!confirm('Delete this press mention?')) return;
-    try {
-      await api('/api/admin/press/' + id, { method: 'DELETE' });
-      showToast('Press mention deleted.');
-      await loadPressTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
   function initPressTab() {
-    document.getElementById('press-new-btn').addEventListener('click', () => openPressForm(null));
-    document.getElementById('press-cancel-btn').addEventListener('click', resetPressForm);
-    document.getElementById('press-form').addEventListener('submit', savePress);
-    document.getElementById('press-list').addEventListener('click', (event) => {
-      const btn = event.target.closest('button[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.list-item').dataset.id;
-      if (btn.dataset.action === 'edit-press') {
-        openPressForm(state.press.find((p) => p.id === id));
-      } else if (btn.dataset.action === 'delete-press') {
-        deletePress(id);
-      }
-    });
+    pressPanel.init();
   }
 
   // --- Investments & Events ---
@@ -775,56 +647,37 @@
     ).join('');
   }
 
-  function renderInvestmentRoundtableChecks(selectedIds) {
-    const container = document.getElementById('investment-roundtable-checks');
-    const selected = new Set(selectedIds || []);
-    if (!state.roundtables.length) {
-      container.innerHTML = '<span class="muted">No roundtables yet.</span>';
-      return;
-    }
-    container.innerHTML = state.roundtables.map((rt) => `
-      <label>
-        <input type="checkbox" value="${escapeHtml(rt.id)}" ${selected.has(rt.id) ? 'checked' : ''}>
-        ${escapeHtml(rt.name)}
-      </label>
-    `).join('');
-  }
-
-  function resetInvestmentForm() {
-    state.editingInvestmentId = null;
-    document.getElementById('investment-id').value = '';
-    document.getElementById('investment-title').value = '';
-    document.getElementById('investment-status').value = 'open';
-    document.getElementById('investment-initiative').value = '';
-    renderInvestmentRoundtableChecks([]);
-    document.getElementById('investment-description').value = '';
-    document.getElementById('investment-outcome').value = '';
-    document.getElementById('investment-member-only').checked = false;
-    setImagePreview('investment', null);
-    document.getElementById('investment-form').classList.add('hidden');
-  }
-
-  function openInvestmentForm(investment) {
-    document.getElementById('investment-form').classList.remove('hidden');
-    state.editingInvestmentId = investment ? investment.id : null;
-    document.getElementById('investment-id').value = investment ? investment.id : '';
-    document.getElementById('investment-title').value = investment ? investment.title : '';
-    document.getElementById('investment-status').value = investment ? investment.status : 'open';
-    document.getElementById('investment-initiative').value = investment ? investment.initiativeId || '' : '';
-    renderInvestmentRoundtableChecks(investment ? investment.roundtableIds : []);
-    document.getElementById('investment-description').value = investment ? stripHtml(investment.description || '') : '';
-    document.getElementById('investment-outcome').value = investment ? stripHtml(investment.outcomeSummary || '') : '';
-    document.getElementById('investment-member-only').checked = investment ? !!investment.memberOnly : false;
-    setImagePreview('investment', investment ? investment.imageUrl : null);
-  }
-
-  function renderInvestments() {
-    const list = document.getElementById('investments-list');
-    if (!state.investments.length) {
-      list.innerHTML = '<p class="muted">No investments yet.</p>';
-      return;
-    }
-    list.innerHTML = state.investments.map((inv) => `
+  const investmentsPanel = createCrudPanel({
+    idPrefix: 'investment',
+    endpoint: '/api/admin/investments',
+    listId: 'investments-list',
+    entityLabel: 'Investment',
+    emptyMessage: 'No investments yet.',
+    deleteConfirm: 'Delete this investment?',
+    reload: () => loadInvestmentsEventsTab(),
+    getItems: () => state.investments,
+    buildPayload: () => ({
+      title: document.getElementById('investment-title').value.trim(),
+      status: document.getElementById('investment-status').value,
+      initiativeId: document.getElementById('investment-initiative').value || null,
+      roundtableIds: Array.from(document.querySelectorAll('#investment-roundtable-checks input:checked')).map((el) => el.value),
+      description: document.getElementById('investment-description').value.trim(),
+      outcomeSummary: document.getElementById('investment-outcome').value.trim() || null,
+      memberOnly: document.getElementById('investment-member-only').checked,
+      imageUrl: document.getElementById('investment-image-url').value || null,
+    }),
+    populateForm: (investment) => {
+      document.getElementById('investment-id').value = investment ? investment.id : '';
+      document.getElementById('investment-title').value = investment ? investment.title : '';
+      document.getElementById('investment-status').value = investment ? investment.status : 'open';
+      document.getElementById('investment-initiative').value = investment ? investment.initiativeId || '' : '';
+      renderRoundtableChecks('investment-roundtable-checks', investment ? investment.roundtableIds : []);
+      document.getElementById('investment-description').value = investment ? stripHtml(investment.description || '') : '';
+      document.getElementById('investment-outcome').value = investment ? stripHtml(investment.outcomeSummary || '') : '';
+      document.getElementById('investment-member-only').checked = investment ? !!investment.memberOnly : false;
+      setImagePreview('investment', investment ? investment.imageUrl : null);
+    },
+    renderItem: (inv) => `
       <div class="list-item" data-id="${escapeHtml(inv.id)}">
         ${inv.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(inv.imageUrl)}" alt="">` : ''}
         <div class="list-item-body">
@@ -840,85 +693,42 @@
           <button class="btn-small danger" data-action="delete-investment" type="button">Delete</button>
         </div>
       </div>
-    `).join('');
-  }
+    `,
+  });
 
-  async function saveInvestment(event) {
-    event.preventDefault();
-    const roundtableIds = Array.from(document.querySelectorAll('#investment-roundtable-checks input:checked')).map((el) => el.value);
-    const payload = {
-      title: document.getElementById('investment-title').value.trim(),
-      status: document.getElementById('investment-status').value,
-      initiativeId: document.getElementById('investment-initiative').value || null,
-      roundtableIds,
-      description: document.getElementById('investment-description').value.trim(),
-      outcomeSummary: document.getElementById('investment-outcome').value.trim() || null,
-      memberOnly: document.getElementById('investment-member-only').checked,
-      imageUrl: document.getElementById('investment-image-url').value || null,
-    };
-    try {
-      if (state.editingInvestmentId) {
-        await api('/api/admin/investments/' + state.editingInvestmentId, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('Investment updated.');
-      } else {
-        await api('/api/admin/investments', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Investment created.');
-      }
-      resetInvestmentForm();
-      await loadInvestmentsEventsTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function deleteInvestment(id) {
-    if (!confirm('Delete this investment?')) return;
-    try {
-      await api('/api/admin/investments/' + id, { method: 'DELETE' });
-      showToast('Investment deleted.');
-      await loadInvestmentsEventsTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  function resetEventForm() {
-    state.editingEventId = null;
-    document.getElementById('event-id').value = '';
-    document.getElementById('event-title').value = '';
-    document.getElementById('event-starts-at').value = '';
-    document.getElementById('event-ends-at').value = '';
-    document.getElementById('event-location').value = '';
-    document.getElementById('event-virtual-link').value = '';
-    document.getElementById('event-description').value = '';
-    document.getElementById('event-member-only').checked = false;
-    document.getElementById('event-is-conference').checked = false;
-    setImagePreview('event', null);
-    document.getElementById('event-form').classList.add('hidden');
-  }
-
-  function openEventForm(evt) {
-    document.getElementById('event-form').classList.remove('hidden');
-    state.editingEventId = evt ? evt.id : null;
-    document.getElementById('event-id').value = evt ? evt.id : '';
-    document.getElementById('event-title').value = evt ? evt.title : '';
-    document.getElementById('event-starts-at').value = evt ? toDatetimeLocalValue(evt.startsAt) : '';
-    document.getElementById('event-ends-at').value = evt ? toDatetimeLocalValue(evt.endsAt) : '';
-    document.getElementById('event-location').value = evt ? evt.location || '' : '';
-    document.getElementById('event-virtual-link').value = evt ? evt.virtualLink || '' : '';
-    document.getElementById('event-description').value = evt ? stripHtml(evt.description || '') : '';
-    document.getElementById('event-member-only').checked = evt ? !!evt.memberOnly : false;
-    document.getElementById('event-is-conference').checked = evt ? !!evt.isConference : false;
-    setImagePreview('event', evt ? evt.imageUrl : null);
-  }
-
-  function renderEvents() {
-    const list = document.getElementById('events-list');
-    if (!state.events.length) {
-      list.innerHTML = '<p class="muted">No events yet.</p>';
-      return;
-    }
-    list.innerHTML = state.events.map((evt) => `
+  const eventsPanel = createCrudPanel({
+    idPrefix: 'event',
+    endpoint: '/api/admin/events',
+    listId: 'events-list',
+    entityLabel: 'Event',
+    emptyMessage: 'No events yet.',
+    deleteConfirm: 'Delete this event?',
+    reload: () => loadInvestmentsEventsTab(),
+    getItems: () => state.events,
+    buildPayload: () => ({
+      title: document.getElementById('event-title').value.trim(),
+      startsAt: fromDatetimeLocalValue(document.getElementById('event-starts-at').value),
+      endsAt: fromDatetimeLocalValue(document.getElementById('event-ends-at').value),
+      location: document.getElementById('event-location').value.trim() || null,
+      virtualLink: document.getElementById('event-virtual-link').value.trim() || null,
+      description: document.getElementById('event-description').value.trim(),
+      memberOnly: document.getElementById('event-member-only').checked,
+      isConference: document.getElementById('event-is-conference').checked,
+      imageUrl: document.getElementById('event-image-url').value || null,
+    }),
+    populateForm: (evt) => {
+      document.getElementById('event-id').value = evt ? evt.id : '';
+      document.getElementById('event-title').value = evt ? evt.title : '';
+      document.getElementById('event-starts-at').value = evt ? toDatetimeLocalValue(evt.startsAt) : '';
+      document.getElementById('event-ends-at').value = evt ? toDatetimeLocalValue(evt.endsAt) : '';
+      document.getElementById('event-location').value = evt ? evt.location || '' : '';
+      document.getElementById('event-virtual-link').value = evt ? evt.virtualLink || '' : '';
+      document.getElementById('event-description').value = evt ? stripHtml(evt.description || '') : '';
+      document.getElementById('event-member-only').checked = evt ? !!evt.memberOnly : false;
+      document.getElementById('event-is-conference').checked = evt ? !!evt.isConference : false;
+      setImagePreview('event', evt ? evt.imageUrl : null);
+    },
+    renderItem: (evt) => `
       <div class="list-item" data-id="${escapeHtml(evt.id)}">
         ${evt.imageUrl ? `<img class="image-preview visible" src="${escapeHtml(evt.imageUrl)}" alt="">` : ''}
         <div class="list-item-body">
@@ -935,47 +745,8 @@
           <button class="btn-small danger" data-action="delete-event" type="button">Delete</button>
         </div>
       </div>
-    `).join('');
-  }
-
-  async function saveEvent(event) {
-    event.preventDefault();
-    const payload = {
-      title: document.getElementById('event-title').value.trim(),
-      startsAt: fromDatetimeLocalValue(document.getElementById('event-starts-at').value),
-      endsAt: fromDatetimeLocalValue(document.getElementById('event-ends-at').value),
-      location: document.getElementById('event-location').value.trim() || null,
-      virtualLink: document.getElementById('event-virtual-link').value.trim() || null,
-      description: document.getElementById('event-description').value.trim(),
-      memberOnly: document.getElementById('event-member-only').checked,
-      isConference: document.getElementById('event-is-conference').checked,
-      imageUrl: document.getElementById('event-image-url').value || null,
-    };
-    try {
-      if (state.editingEventId) {
-        await api('/api/admin/events/' + state.editingEventId, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast('Event updated.');
-      } else {
-        await api('/api/admin/events', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Event created.');
-      }
-      resetEventForm();
-      await loadInvestmentsEventsTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function deleteEvent(id) {
-    if (!confirm('Delete this event?')) return;
-    try {
-      await api('/api/admin/events/' + id, { method: 'DELETE' });
-      showToast('Event deleted.');
-      await loadInvestmentsEventsTab();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
+    `,
+  });
 
   async function loadInvestmentsEventsTab() {
     try {
@@ -990,41 +761,16 @@
       state.roundtables = roundtables;
       state.initiatives = initiatives;
       populateInvestmentInitiativeSelect();
-      renderInvestments();
-      renderEvents();
+      investmentsPanel.renderList();
+      eventsPanel.renderList();
     } catch (err) {
       showToast(err.message, true);
     }
   }
 
   function initInvestmentsEventsTab() {
-    document.getElementById('investment-new-btn').addEventListener('click', () => openInvestmentForm(null));
-    document.getElementById('investment-cancel-btn').addEventListener('click', resetInvestmentForm);
-    document.getElementById('investment-form').addEventListener('submit', saveInvestment);
-    document.getElementById('investments-list').addEventListener('click', (event) => {
-      const btn = event.target.closest('button[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.list-item').dataset.id;
-      if (btn.dataset.action === 'edit-investment') {
-        openInvestmentForm(state.investments.find((i) => i.id === id));
-      } else if (btn.dataset.action === 'delete-investment') {
-        deleteInvestment(id);
-      }
-    });
-
-    document.getElementById('event-new-btn').addEventListener('click', () => openEventForm(null));
-    document.getElementById('event-cancel-btn').addEventListener('click', resetEventForm);
-    document.getElementById('event-form').addEventListener('submit', saveEvent);
-    document.getElementById('events-list').addEventListener('click', (event) => {
-      const btn = event.target.closest('button[data-action]');
-      if (!btn) return;
-      const id = btn.closest('.list-item').dataset.id;
-      if (btn.dataset.action === 'edit-event') {
-        openEventForm(state.events.find((e) => e.id === id));
-      } else if (btn.dataset.action === 'delete-event') {
-        deleteEvent(id);
-      }
-    });
+    investmentsPanel.init();
+    eventsPanel.init();
   }
 
   // --- Settings ---
@@ -1076,6 +822,9 @@
   }
 
   // --- Users ---
+  //
+  // Not a createCrudPanel: invite-by-email (no title/body form), no edit
+  // flow, and a table layout rather than .list-item rows.
 
   async function loadUsersTab() {
     const tbody = document.getElementById('users-rows');

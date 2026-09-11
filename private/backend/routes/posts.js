@@ -1,22 +1,12 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
-const sanitizeHtml = require('sanitize-html');
 const content = require('../db/content.js');
 const { requireAdmin } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { redactPost } = require('../shared/access.js');
+const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
 
 const router = Router();
-
-function sanitizePostBody(html) {
-  return sanitizeHtml(html || '', {
-    allowedTags: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 'a', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote', 'img'],
-    allowedAttributes: {
-      a: ['href', 'target', 'rel'],
-      img: ['src', 'alt'],
-    },
-  });
-}
 
 router.get(
   '/api/posts',
@@ -93,7 +83,7 @@ router.post(
   '/api/admin/posts',
   requireAdmin,
   asyncRoute(async (req, res) => {
-    const payload = { ...req.body, body: sanitizePostBody(req.body.body) };
+    const payload = { ...req.body, body: sanitizeRichText(req.body.body) };
     const post = await content.createPost(payload);
     captureMessage(`Post created — id: ${post.id}, type: ${post.type}, title: "${post.title}"`, 'info');
     res.status(201).json(post);
@@ -105,7 +95,7 @@ router.put(
   requireAdmin,
   asyncRoute(async (req, res) => {
     const updates = { ...req.body };
-    if (updates.body) updates.body = sanitizePostBody(updates.body);
+    if (updates.body) updates.body = sanitizeRichText(updates.body);
     const post = await content.updatePost(req.params.id, updates);
     if (!post) {
       captureMessage(`Post update 404: id "${req.params.id}" not found`, 'warning');
