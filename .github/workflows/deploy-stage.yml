@@ -52,8 +52,10 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_BACKEND_BUCKET_STAGE: ${{ secrets.AWS_BACKEND_BUCKET_STAGE }}
           AWS_S3_BUCKET_STAGE: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+          ADMIN_PASS_STAGE: ${{ secrets.ADMIN_PASS_STAGE }}
+          SESSION_SECRET_STAGE: ${{ secrets.SESSION_SECRET_STAGE }}
         run: |
-          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BACKEND_BUCKET_STAGE AWS_S3_BUCKET_STAGE)
+          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BACKEND_BUCKET_STAGE AWS_S3_BUCKET_STAGE ADMIN_PASS_STAGE SESSION_SECRET_STAGE)
           for var in "${required_vars[@]}"; do
             if [ -z "${!var}" ]; then
               echo "Missing required GitHub secret: $var"
@@ -90,10 +92,16 @@ jobs:
 
       - name: Apply environment variables to stage Lambda
         env:
-          ADMIN_USER: ${{ secrets.ADMIN_USER_STAGE }}
+          # Hardcoded, not a secret — see deploy.yml for why (bootstrap
+          # fallback identity, not a credential; must never match a real
+          # Users-table email or it silently makes ADMIN_PASS unreachable).
+          ADMIN_USER: admin
           ADMIN_PASS: ${{ secrets.ADMIN_PASS_STAGE }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET_STAGE }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # Hardcoded, not a secret — see deploy.yml for why (a Sentry DSN
+          # is a write-only ingest key, and kept getting corrupted via the
+          # GitHub secrets web UI).
+          SENTRY_DSN: https://e7a78ec042572cc064b199390f8a76e6@o4511595661623296.ingest.us.sentry.io/4511850670850048
           SENTRY_BROWSER_DSN: ${{ secrets.SENTRY_BROWSER_DSN }}
           SENTRY_ENVIRONMENT: staging
           SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
@@ -185,6 +193,14 @@ jobs:
               'NOTIFY_EMAIL': env_values.get('NOTIFY_EMAIL', current.get('NOTIFY_EMAIL', '')),
               'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
           })
+
+          # Defense in depth — see deploy.yml for why these two are
+          # hardcoded above rather than free-text secrets.
+          import re
+          if current['SENTRY_DSN'] and not re.match(r'^https://[^@\s]+@[^/\s]+\.ingest\.[^/\s]+\.sentry\.io/\d+$', current['SENTRY_DSN']):
+              raise SystemExit(f"SENTRY_DSN does not look like a valid Sentry DSN: {current['SENTRY_DSN']!r}")
+          if '@' in current['ADMIN_USER'] or not current['ADMIN_USER']:
+              raise SystemExit(f"ADMIN_USER must be a non-empty, non-email bootstrap identifier, got: {current['ADMIN_USER']!r}")
 
           try:
               subprocess.check_call([

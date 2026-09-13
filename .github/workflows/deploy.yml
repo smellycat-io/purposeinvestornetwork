@@ -51,8 +51,10 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
         run: |
-          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BACKEND_BUCKET AWS_S3_BUCKET)
+          required_vars=(AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_BACKEND_BUCKET AWS_S3_BUCKET ADMIN_PASS SESSION_SECRET)
           for var in "${required_vars[@]}"; do
             if [ -z "${!var}" ]; then
               echo "Missing required GitHub secret: $var"
@@ -89,10 +91,22 @@ jobs:
 
       - name: Apply environment variables to Lambda
         env:
-          ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          # Hardcoded, not a secret — this is a bootstrap fallback identity,
+          # not itself a credential, and it must NEVER be set to a real
+          # user's email (it's checked only when no Users-table account
+          # matches the submitted email; setting it to one that does
+          # silently makes ADMIN_PASS unreachable for that account, which is
+          # exactly the lockout this caused once already).
+          ADMIN_USER: admin
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # Hardcoded, not a secret — a Sentry DSN is a write-only ingest
+          # key (worst case of exposure is spam events, not data access),
+          # and as a GitHub secret its value kept getting corrupted via the
+          # web UI (once literally to the string "SENTRY_DSN"). Get the
+          # current value from Sentry project settings if this ever needs
+          # to change.
+          SENTRY_DSN: https://e7a78ec042572cc064b199390f8a76e6@o4511595661623296.ingest.us.sentry.io/4511850670850048
           SENTRY_BROWSER_DSN: ${{ secrets.SENTRY_BROWSER_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
@@ -185,6 +199,18 @@ jobs:
               'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
           })
 
+          # Defense in depth: these two are hardcoded above specifically
+          # because free-text secret values kept drifting into broken
+          # states (SENTRY_DSN once became the literal string "SENTRY_DSN";
+          # ADMIN_USER once became a real email that shadowed ADMIN_PASS
+          # entirely). Fail loudly here rather than silently deploying a
+          # value that looks like one of those mistakes again.
+          import re
+          if current['SENTRY_DSN'] and not re.match(r'^https://[^@\s]+@[^/\s]+\.ingest\.[^/\s]+\.sentry\.io/\d+$', current['SENTRY_DSN']):
+              raise SystemExit(f"SENTRY_DSN does not look like a valid Sentry DSN: {current['SENTRY_DSN']!r}")
+          if '@' in current['ADMIN_USER'] or not current['ADMIN_USER']:
+              raise SystemExit(f"ADMIN_USER must be a non-empty, non-email bootstrap identifier, got: {current['ADMIN_USER']!r}")
+
           try:
               subprocess.check_call([
                   'aws', 'lambda', 'update-function-configuration',
@@ -210,10 +236,22 @@ jobs:
 
       - name: Create Lambda if missing
         env:
-          ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          # Hardcoded, not a secret — this is a bootstrap fallback identity,
+          # not itself a credential, and it must NEVER be set to a real
+          # user's email (it's checked only when no Users-table account
+          # matches the submitted email; setting it to one that does
+          # silently makes ADMIN_PASS unreachable for that account, which is
+          # exactly the lockout this caused once already).
+          ADMIN_USER: admin
           ADMIN_PASS: ${{ secrets.ADMIN_PASS }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          # Hardcoded, not a secret — a Sentry DSN is a write-only ingest
+          # key (worst case of exposure is spam events, not data access),
+          # and as a GitHub secret its value kept getting corrupted via the
+          # web UI (once literally to the string "SENTRY_DSN"). Get the
+          # current value from Sentry project settings if this ever needs
+          # to change.
+          SENTRY_DSN: https://e7a78ec042572cc064b199390f8a76e6@o4511595661623296.ingest.us.sentry.io/4511850670850048
           SENTRY_BROWSER_DSN: ${{ secrets.SENTRY_BROWSER_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           SENTRY_RELEASE: ${{ secrets.SENTRY_RELEASE }}
