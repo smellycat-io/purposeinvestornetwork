@@ -256,6 +256,95 @@ describe('createPasswordReset + resetPassword', () => {
   });
 });
 
+describe('updateUser', () => {
+  test('updates only the fields passed, ignoring anything not in the whitelist', async () => {
+    const existing = { id: 'u1', email: 'a@example.com', firstName: 'Old', passwordHash: 'irrelevant', status: 'active' };
+    ddbMock.on(GetCommand).resolves({ Item: existing });
+    ddbMock.on(PutCommand).resolves({});
+
+    const updated = await users.updateUser('u1', { firstName: 'New', email: 'attacker@example.com', status: 'pending' });
+
+    expect(updated.firstName).toBe('New');
+    expect(updated.email).toBe('a@example.com'); // not in the whitelist — unchanged
+    const putItem = ddbMock.commandCalls(PutCommand)[0].args[0].input.Item;
+    expect(putItem.status).toBe('active'); // not in the whitelist — unchanged
+  });
+
+  test('returns null and writes nothing for a nonexistent user', async () => {
+    ddbMock.on(GetCommand).resolves({ Item: undefined });
+
+    const result = await users.updateUser('missing', { firstName: 'New' });
+
+    expect(result).toBeNull();
+    expect(ddbMock.commandCalls(PutCommand)).toHaveLength(0);
+  });
+
+  test('never returns passwordHash or token fields', async () => {
+    const existing = {
+      id: 'u1',
+      email: 'a@example.com',
+      passwordHash: 'secret-hash',
+      inviteTokenHash: 'secret-token-hash',
+      resetTokenHash: 'another-secret',
+    };
+    ddbMock.on(GetCommand).resolves({ Item: existing });
+    ddbMock.on(PutCommand).resolves({});
+
+    const updated = await users.updateUser('u1', { firstName: 'New' });
+
+    expect(updated).not.toHaveProperty('passwordHash');
+    expect(updated).not.toHaveProperty('inviteTokenHash');
+    expect(updated).not.toHaveProperty('resetTokenHash');
+  });
+
+  test('changing role to chair forces roundtableIds empty, keeps the submitted roundtableId', async () => {
+    const existing = { id: 'u1', role: 'member', roundtableId: null, roundtableIds: ['rt-1', 'rt-2'] };
+    ddbMock.on(GetCommand).resolves({ Item: existing });
+    ddbMock.on(PutCommand).resolves({});
+
+    const updated = await users.updateUser('u1', { role: 'chair', roundtableId: 'rt-5' });
+
+    expect(updated.role).toBe('chair');
+    expect(updated.roundtableId).toBe('rt-5');
+    expect(updated.roundtableIds).toEqual([]);
+  });
+
+  test('changing role to member forces roundtableId null, keeps the submitted roundtableIds', async () => {
+    const existing = { id: 'u1', role: 'chair', roundtableId: 'rt-1', roundtableIds: [] };
+    ddbMock.on(GetCommand).resolves({ Item: existing });
+    ddbMock.on(PutCommand).resolves({});
+
+    const updated = await users.updateUser('u1', { role: 'member', roundtableIds: ['rt-2', 'rt-3'] });
+
+    expect(updated.role).toBe('member');
+    expect(updated.roundtableId).toBeNull();
+    expect(updated.roundtableIds).toEqual(['rt-2', 'rt-3']);
+  });
+
+  test('changing role to admin forces both roundtableId and roundtableIds empty', async () => {
+    const existing = { id: 'u1', role: 'member', roundtableId: null, roundtableIds: ['rt-1'] };
+    ddbMock.on(GetCommand).resolves({ Item: existing });
+    ddbMock.on(PutCommand).resolves({});
+
+    const updated = await users.updateUser('u1', { role: 'admin' });
+
+    expect(updated.roundtableId).toBeNull();
+    expect(updated.roundtableIds).toEqual([]);
+  });
+
+  test('editing an unrelated field does not touch an existing roundtableId/roundtableIds', async () => {
+    const existing = { id: 'u1', role: 'chair', roundtableId: 'rt-1', roundtableIds: [], phone: 'old' };
+    ddbMock.on(GetCommand).resolves({ Item: existing });
+    ddbMock.on(PutCommand).resolves({});
+
+    const updated = await users.updateUser('u1', { phone: 'new' });
+
+    expect(updated.phone).toBe('new');
+    expect(updated.role).toBe('chair');
+    expect(updated.roundtableId).toBe('rt-1'); // untouched — role wasn't part of this update
+  });
+});
+
 describe('updateOwnPassword', () => {
   test('succeeds and stores a verifiable new password when the current password is correct', async () => {
     const currentHash = hashPassword('correct-password');
