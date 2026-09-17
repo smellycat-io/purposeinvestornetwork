@@ -58,7 +58,20 @@ router.post('/login', async (req, res) => {
 
     if (loginOk) {
       req.session.loggedIn = true;
-      if (user) req.session.userId = user.id;
+      if (user) {
+        req.session.userId = user.id;
+        // `|| 'admin'` matters: every account created before roles existed
+        // has no `role` field at all. Without this fallback those accounts
+        // would get `role: undefined` and fail every requireRole('admin', …)
+        // check — a silent lockout of existing staff, not just new behavior.
+        req.session.role = user.role || 'admin';
+        req.session.roundtableId = user.roundtableId || null;
+      } else {
+        // The bootstrap ADMIN_USER/ADMIN_PASS path has no user record at
+        // all — treat it as Admin, same as it's always implicitly been.
+        req.session.role = 'admin';
+        req.session.roundtableId = null;
+      }
       captureMessage(`Admin login succeeded — email: "${email}", checked against: ${checkedAgainst}`, 'info');
       return res.redirect('/admin');
     }

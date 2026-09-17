@@ -122,18 +122,23 @@ derived from `title`, suffixed.
 | `uploadedAt` | ISO string | |
 
 ### Users
-`AWS_USERS_TABLE` — currently PIN staff/admin accounts only (invite-based, email is the
-login identity). Invite and reset tokens: high-entropy random hex, emailed raw, only
-the SHA-256 hash stored. Reads are scan-all today (`db/users.js`'s own comment notes
-this holds because it's "a small table"); with Members expected to reach the thousands,
-an email-lookup GSI should be added as part of the role rollout rather than deferred —
-`findUserByEmail`/`acceptInvite`/password-reset all currently scan-and-filter by email,
-which is the specific query pattern the GSI would replace.
+`AWS_USERS_TABLE` — Admin, Chair, and Member accounts (invite-based, email is the login
+identity). Invite and reset tokens: high-entropy random hex, emailed raw, only the
+SHA-256 hash stored. `findUserByEmail` queries the `email-index` GSI (hash key `email`)
+rather than scanning — Member volume is expected to reach the thousands. **The GSI
+itself is an infra prerequisite, not something this schema change provisions** — see
+`docs/ARCHITECTURE.md`'s Users-table GSI note for the exact command; it must exist on a
+table before code that queries it is deployed against that table. Every other lookup
+here (invite/reset token matching, in `listAllRaw`) stays scan-and-filter — tokens
+aren't a queryable key, and invite/reset volume stays low regardless of Member count.
 
 | field | type | notes |
 |---|---|---|
 | `id` | string | |
-| `email` | string | login identity |
+| `email` | string | login identity, always stored lowercase (so the GSI query is a plain equality match) |
+| `role` | `admin` \| `chair` \| `member` | defaults to `admin` when omitted — every account created before roles existed has no `role` field, and `routes/auth.js`'s login handler falls back to `'admin'` for exactly that reason |
+| `roundtableId` | string \| null | set for `chair` only (their one assigned roundtable); always `null` for `admin`/`member`, enforced in `createInvite` regardless of what's passed in |
+| `roundtableIds` | string[] | set for `member` only; always `[]` for `admin`/`chair`, same enforcement |
 | `firstName` / `lastName` | string \| null | set on invite acceptance, not at invite time |
 | `phone` / `address` | string \| null | |
 | `passwordHash` | string | set on invite acceptance |
@@ -157,8 +162,10 @@ default in-memory session store would bounce an already-logged-in admin back to
 
 ## API Endpoints (as currently implemented)
 
-All `/api/admin/*` and `/admin` routes are gated by `requireAdmin` — currently a flat
-check (`req.session.loggedIn`), not role-aware.
+All `/api/admin/*` and `/admin` routes are gated by `requireAdmin` (a flat
+`req.session.loggedIn` check) except `POST /api/admin/users/invite`, which uses the
+role-aware `requireRole('admin', 'chair')` — see Role & Permission Model above.
+Everything else stays on `requireAdmin` until deliberately migrated in Stage 2/3.
 
 | Resource | Public | Admin (requireAdmin) |
 |---|---|---|
@@ -172,7 +179,7 @@ check (`req.session.loggedIn`), not role-aware.
 | Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET /api/admin/users`, `POST /api/admin/users/invite`, `DELETE /api/admin/users/:id` |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) |
 
-## Role & Permission Model — in progress
+## Role & Permission Model — Stage 1 shipped, route-scoping in progress
 
 **Goal** (per Elise, current spec): three roles on the same Users table.
 - **Admin**: full access to everything and everyone; sends invites (chair or member type).
@@ -182,36 +189,30 @@ check (`req.session.loggedIn`), not role-aware.
   member area (profile, education content, events calendar, member news) rather than
   the admin dashboard.
 
-**Proposed schema change** — add to the Users item:
+**Stage 1 — schema + auth foundation (shipped):**
+- Users item gains `role` / `roundtableId` / `roundtableIds` — see the Users table
+  above for the exact shape and defaulting rules.
+- `createInvite(email, { role, roundtableId, roundtableIds })` carries those fields
+  onto the pending-invite item so `acceptInvite` sets them on the resulting user record
+  unchanged — the invitee never chooses their own role.
+- `shared/auth.js` gets role-aware middleware and scoping helpers alongside
+  `requireAdmin`, not replacing it (other routes keep using `requireAdmin` until
+  deliberately migrated in Stage 2/3):
+  - `requireRole(...roles)` — checks `req.session.role`; unlike `requireAdmin` (which
+    always redirects, even for `/api/*` callers), this returns JSON 401/403 for `/api/*`
+    routes and redirects to `/login` for page routes, since a role-gated `fetch()` call
+    needs a real error to branch on.
+  - `matchesRoundtable(chairRoundtableId, targetRoundtableId)` — Chair-to-single-item
+    equality check (Initiatives/Posts/Investments scoping, Stage 2/3).
+  - `roundtableArrayContains(roundtableIds, chairRoundtableId)` — Chair-to-Member
+    array-contains check (Stage 2/3's Chair-scoped member list/management).
+- Login (`routes/auth.js`) sets `req.session.role` and `req.session.roundtableId`
+  alongside the existing `req.session.loggedIn`/`userId`.
+- `POST /api/admin/users/invite` is role-aware (`requireRole('admin', 'chair')`, not
+  `requireAdmin`) — see the API Endpoints table's Users row and the endpoint bullet
+  below, which is now current-state rather than proposed.
 
-| field | type | notes |
-|---|---|---|
-| `role` | `admin` \| `chair` \| `member` | new |
-| `roundtableId` | string \| null | set for `chair` only (their one assigned roundtable); always `null` for `admin`/`member` |
-| `roundtableIds` | string[] | set for `member` only — zero, one, or many roundtables; always empty for `admin`/`chair` |
-
-Two separate fields rather than reusing one, since Chair is deliberately singular
-(assigned to exactly one Roundtable) while Member is deliberately variable (can belong
-to several or none) — collapsing them into one shape would blur that distinction and
-make scoping checks branch on role anyway.
-
-`createInvite` extends to accept `role` and `roundtableId`/`roundtableIds`, carried onto
-the invite item so `acceptInvite` sets them on the resulting user record without the
-invitee choosing their own role.
-
-**Proposed auth change** — `shared/auth.js` gets role-aware middleware alongside
-`requireAdmin`, not replacing it:
-- `requireRole('admin')` — Admin-only actions (inviting Chairs, full user list)
-- `requireRole('admin', 'chair')` — actions a Chair can also do, but scoped
-- A scoping helper (e.g. `scopeToRoundtable(req, users)`) that Chair-accessible routes
-  call to filter results/writes to `user.roundtableId === req.session.roundtableId`
-
-**Proposed endpoint changes:**
-- `POST /api/admin/users/invite` — body gains `role` + `roundtableId` (chair) or
-  `roundtableIds` (member, can be `[]`). Server validates the requester can issue that
-  role: Admin can invite `chair` (any roundtable) or `member` (any roundtables or none);
-  Chair can only invite `member`, and the invite is forced to include the Chair's own
-  `roundtableId` in the new member's `roundtableIds` regardless of what's submitted.
+**Still proposed (Stage 2/3 — route-scoping, not yet built):**
 - `GET /api/admin/users` — Admin sees all; Chair sees only Members whose `roundtableIds`
   array contains the Chair's own `roundtableId` (array-contains, not equality, since a
   Member can belong to several Roundtables).

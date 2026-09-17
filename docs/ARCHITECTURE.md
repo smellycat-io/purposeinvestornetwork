@@ -99,13 +99,29 @@ The CloudFormation templates in `private/infra/` are **not** all in active use:
 - **`cloudfront.yml`** is the one template genuinely reused — the same parameterized
   template backs both production's and staging's API Gateway stack.
 
-**Planned: Users-table email GSI.** The Admin/Chair/Member role rollout (see
-`docs/DATA-MODEL.md`'s Users section) adds an email-lookup GSI to the Users table to
-replace `findUserByEmail`/`acceptInvite`/password-reset's current scan-and-filter.
-Since `content-tables.yml` isn't applied by the deploy pipeline (see above), this GSI
-needs an explicit manual `aws dynamodb update-table` (or a `content-tables.yml` edit
-applied by hand) against both the production and staging tables when that work ships —
-it won't appear just because `docs/DATA-MODEL.md` documents it.
+**Required before deploying `db/users.js`'s `email-index` GSI query — not yet
+provisioned.** `findUserByEmail` (`db/users.js`) queries a GSI named `email-index`
+(hash key `email`) instead of the scan-and-filter it used before the Admin/Chair/Member
+role rollout (see `docs/DATA-MODEL.md`'s Users section) — Member volume is expected to
+reach the thousands. The Users table isn't in `content-tables.yml` at all (it and the
+Sessions table were both created some other way, most likely by hand, like the rest of
+this table — see the note above), so this can't be added via a CloudFormation update
+either; it needs a direct `aws dynamodb update-table` against **both** the production
+and staging Users tables before this code is deployed to each — querying a nonexistent
+index throws, and this is the login path:
+
+```bash
+aws dynamodb update-table \
+  --table-name purpose-investor-network-users \
+  --attribute-definitions AttributeName=email,AttributeType=S \
+  --global-secondary-index-updates '[{"Create":{"IndexName":"email-index","KeySchema":[{"AttributeName":"email","KeyType":"HASH"}],"Projection":{"ProjectionType":"ALL"}}}]'
+```
+
+Repeat with `purpose-investor-network-users-stage` for staging. No `ProvisionedThroughput`
+needed — both tables are `PAY_PER_REQUEST`, which GSIs inherit automatically. A GSI
+backfill on an existing table is asynchronous (`Backfilling` in `describe-table` until
+done); on a table this small it's expected to finish before the next request, but this
+is the moment that assumption could someday stop holding.
 
 Net effect: the real infrastructure state (Lambda config, IAM policies) lives in AWS,
 reconciled imperatively by the deploy workflows' inline scripts — there's no single
