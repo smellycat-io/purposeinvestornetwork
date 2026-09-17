@@ -8,6 +8,14 @@ const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
 
 const router = Router();
 
+// A Chair has no authority over any Roundtable but their own — on create,
+// that means their submitted roundtableIds must be exactly their own
+// Roundtable, not their own plus others. (Admin is unrestricted; only Chair
+// callers are checked against this.)
+function isOwnRoundtableOnly(roundtableIds, chairRoundtableId) {
+  return Array.isArray(roundtableIds) && roundtableIds.length > 0 && roundtableIds.every((rt) => rt === chairRoundtableId);
+}
+
 router.get(
   '/api/investments',
   asyncRoute(async (req, res) => {
@@ -37,13 +45,14 @@ router.get(
 );
 
 // Same create/edit/delete scoping shape as routes/initiatives.js — see its
-// comments for why create validates the submitted roundtableIds while
-// edit/delete check the existing item's roundtableIds instead.
+// comments for why create checks the submitted roundtableIds are exactly
+// the Chair's own, while edit/delete check the existing item's
+// roundtableIds instead.
 router.post(
   '/api/admin/investments',
   requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
-    if (req.session.role === 'chair' && !roundtableArrayContains(req.body.roundtableIds, req.session.roundtableId)) {
+    if (req.session.role === 'chair' && !isOwnRoundtableOnly(req.body.roundtableIds, req.session.roundtableId)) {
       return res.status(403).json({ error: 'Not authorized to create an Investment outside your Roundtable.' });
     }
     const payload = {

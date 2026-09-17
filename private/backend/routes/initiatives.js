@@ -6,6 +6,14 @@ const { asyncRoute } = require('../shared/asyncRoute.js');
 
 const router = Router();
 
+// A Chair has no authority over any Roundtable but their own — on create,
+// that means their submitted roundtableIds must be exactly their own
+// Roundtable, not their own plus others. (Admin is unrestricted; only Chair
+// callers are checked against this.)
+function isOwnRoundtableOnly(roundtableIds, chairRoundtableId) {
+  return Array.isArray(roundtableIds) && roundtableIds.length > 0 && roundtableIds.every((rt) => rt === chairRoundtableId);
+}
+
 router.get(
   '/api/initiatives/:slug',
   asyncRoute(async (req, res) => {
@@ -25,16 +33,14 @@ router.get(
 );
 
 // Create: there's no existing item to check scope against yet, so a Chair
-// is authorized by the roundtableIds they submit — their own Roundtable
-// must be in that list. Unlike the PUT edit-scoping below, a Chair may
-// still list other Roundtables alongside their own on create (e.g. a joint
-// initiative) — there's no prior membership those other Roundtables'
-// Chairs could be having unilaterally altered out from under them.
+// is authorized by the roundtableIds they submit — a Chair has no
+// authority over any Roundtable but their own, so the submitted array must
+// be exactly their own Roundtable, not their own plus others.
 router.post(
   '/api/admin/initiatives',
   requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
-    if (req.session.role === 'chair' && !roundtableArrayContains(req.body.roundtableIds, req.session.roundtableId)) {
+    if (req.session.role === 'chair' && !isOwnRoundtableOnly(req.body.roundtableIds, req.session.roundtableId)) {
       return res.status(403).json({ error: 'Not authorized to create an Initiative outside your Roundtable.' });
     }
     const initiative = await content.createInitiative(req.body);

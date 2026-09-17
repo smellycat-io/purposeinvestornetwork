@@ -271,21 +271,19 @@ never a body/param-supplied id, so this endpoint can never edit anyone else's re
 
 **Chair content access — Initiatives and Investments (`POST/PUT/DELETE
 /api/admin/initiatives[/:id]`, `POST/PUT/DELETE /api/admin/investments[/:id]`, both
-`requireRole('admin', 'chair')`).** Both tables carry `roundtableIds` directly, so
-scoping is a direct `roundtableArrayContains` check. On create, there's no existing
-item to check yet, so a Chair is authorized by the `roundtableIds` they submit — their
-own Roundtable must be in that list (a Chair may still list other Roundtables alongside
-their own on create, e.g. a joint initiative — there's no prior membership another
-Roundtable's Chair could be having unilaterally altered out from under them). On edit
-and delete, authorization checks the *existing* item's current `roundtableIds`, never
-the request body — a PUT body could otherwise move an item a Chair doesn't own into
-scope, or omit `roundtableIds` and be treated as unrestricted. If an edit's body
-touches `roundtableIds` at all, the same rule the "Editing a user" endpoint above
-applies to a Member's `roundtableIds` applies here too: a Chair may add or remove only
-their own Roundtable, never another Roundtable's presence on the item (rejected with
-400, not silently dropped). The `GET` list/read endpoints on
-both tables are unchanged — still flat `requireAdmin`, returning every item regardless
-of role.
+`requireRole('admin', 'chair')`).** Both tables carry `roundtableIds` directly. A Chair
+has no authority over any Roundtable but their own, on create or afterward: on create,
+there's no existing item to check yet, so a Chair is authorized by the `roundtableIds`
+they submit — that array must be exactly their own Roundtable, not their own plus
+others. On edit and delete, authorization checks the *existing* item's current
+`roundtableIds` (`roundtableArrayContains`), never the request body — a PUT body could
+otherwise move an item a Chair doesn't own into scope, or omit `roundtableIds` and be
+treated as unrestricted. If an edit's body touches `roundtableIds` at all, the same
+rule the "Editing a user" endpoint above applies to a Member's `roundtableIds` applies
+here too: a Chair may add or remove only their own Roundtable, never another
+Roundtable's presence on the item (rejected with 400, not silently dropped). The `GET`
+list/read endpoints on both tables are unchanged — still flat `requireAdmin`, returning
+every item regardless of role.
 
 **Chair content access — Posts (`POST/PUT/DELETE /api/admin/posts[/:id]`,
 `requireRole('admin', 'chair')`).** Posts don't carry a Roundtable reference directly,

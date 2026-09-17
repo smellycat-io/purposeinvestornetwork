@@ -148,7 +148,7 @@ describe('POST /api/admin/initiatives', () => {
     expect(res.body.roundtableIds).toEqual(['rt-A']);
   });
 
-  test('a Chair can include other Roundtables alongside their own', async () => {
+  test('a Chair cannot include other Roundtables alongside their own — 403', async () => {
     seedUsers(freshRoster());
     const agent = await loginAs('chair-a@example.com');
 
@@ -156,8 +156,7 @@ describe('POST /api/admin/initiatives', () => {
       .post('/api/admin/initiatives')
       .send({ title: 'Joint Initiative', roundtableIds: ['rt-A', 'rt-B'] });
 
-    expect(res.status).toBe(201);
-    expect(res.body.roundtableIds).toEqual(['rt-A', 'rt-B']);
+    expect(res.status).toBe(403);
   });
 
   test('a Chair cannot create outside their own Roundtable — 403', async () => {
