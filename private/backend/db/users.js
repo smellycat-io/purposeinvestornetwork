@@ -65,10 +65,12 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
-async function listUsers() {
-  if (!USERS_TABLE) return [];
-  const result = await getDocClient().send(new ScanCommand({ TableName: USERS_TABLE }));
-  return (result.Items || []).map((u) => ({
+// The public shape of a user record — never includes passwordHash or any
+// token field. listUsers/updateUser both return through this so that stays
+// true by construction instead of by remembering to strip it at each call
+// site (same reasoning as listUsers's original passwordHash omission).
+function toPublicUser(u) {
+  return {
     id: u.id,
     email: u.email,
     firstName: u.firstName || null,
@@ -80,11 +82,17 @@ async function listUsers() {
     roundtableId: u.roundtableId || null,
     roundtableIds: u.roundtableIds || [],
     createdAt: u.createdAt,
-  }));
+  };
+}
+
+async function listUsers() {
+  if (!USERS_TABLE) return [];
+  const result = await getDocClient().send(new ScanCommand({ TableName: USERS_TABLE }));
+  return (result.Items || []).map(toPublicUser);
 }
 
 async function getUserById(id) {
-  if (!USERS_TABLE) return null;
+  if (!USERS_TABLE || !id) return null;
   const result = await getDocClient().send(new GetCommand({ TableName: USERS_TABLE, Key: { id } }));
   return result.Item || null;
 }
@@ -207,6 +215,38 @@ async function deleteUser(id) {
   await getDocClient().send(new DeleteCommand({ TableName: USERS_TABLE, Key: { id } }));
 }
 
+// The only fields any caller (Admin editing another user, a Chair editing
+// a Member's roundtableIds, or a user editing their own profile) is ever
+// allowed to touch — status/tokens/passwordHash all have their own
+// dedicated functions above and are deliberately not editable here.
+// Route-level code (routes/users.js) decides which subset of *these* a
+// given requester's role may actually submit; this is the outer bound, not
+// the permission check itself.
+const UPDATABLE_FIELDS = ['firstName', 'lastName', 'phone', 'address', 'role', 'roundtableId', 'roundtableIds'];
+
+async function updateUser(id, fields) {
+  const existing = await getUserById(id);
+  if (!existing) return null;
+
+  const updates = {};
+  for (const key of UPDATABLE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(fields, key)) updates[key] = fields[key];
+  }
+
+  // Same admin/chair/member invariant createInvite enforces at creation —
+  // re-applied here only when `role` is actually part of *this* update, so
+  // an unrelated field edit (e.g. just `phone`) can't silently wipe an
+  // existing roundtableId/roundtableIds.
+  if (Object.prototype.hasOwnProperty.call(updates, 'role')) {
+    if (updates.role !== 'chair') updates.roundtableId = null;
+    if (updates.role !== 'member') updates.roundtableIds = [];
+  }
+
+  const item = { ...existing, ...updates, id, updatedAt: new Date().toISOString() };
+  await getDocClient().send(new PutCommand({ TableName: USERS_TABLE, Item: item }));
+  return toPublicUser(item);
+}
+
 module.exports = {
   listUsers,
   getUserById,
@@ -216,5 +256,6 @@ module.exports = {
   createPasswordReset,
   resetPassword,
   updateOwnPassword,
+  updateUser,
   deleteUser,
 };
