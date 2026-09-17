@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireAdmin, requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { sendEmail } = require('../shared/email.js');
 const {
@@ -35,9 +35,16 @@ router.get(
   }, 'Unable to load users.')
 );
 
+// Admin can invite a Chair (any roundtableId) or a Member (any
+// roundtableIds, including none) — not another Admin; there's no Stage 1
+// path for that yet (see docs/DATA-MODEL.md, which specifies this same
+// boundary). A Chair can only invite a Member, and only onto their own
+// Roundtable — the request body's role/roundtableId/roundtableIds are
+// ignored rather than trusted once the requester is a Chair, since this is
+// a permission boundary, not a client-side convenience.
 router.post(
   '/api/admin/users/invite',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
     const email = String((req.body || {}).email || '').trim().toLowerCase();
     if (!email || !EMAIL_PATTERN.test(email)) {
@@ -47,7 +54,30 @@ router.post(
       return res.status(400).json({ error: 'That email has already been invited.' });
     }
 
-    const { user, token } = await createInvite(email);
+    const requesterRole = req.session.role;
+    let role;
+    let roundtableId = null;
+    let roundtableIds = [];
+
+    if (requesterRole === 'chair') {
+      role = 'member';
+      roundtableIds = [req.session.roundtableId];
+    } else {
+      role = String((req.body || {}).role || '').trim();
+      if (!['chair', 'member'].includes(role)) {
+        return res.status(400).json({ error: 'Role must be "chair" or "member".' });
+      }
+      if (role === 'chair') {
+        roundtableId = (req.body || {}).roundtableId || null;
+        if (!roundtableId) {
+          return res.status(400).json({ error: 'A Chair invite requires a roundtableId.' });
+        }
+      } else {
+        roundtableIds = Array.isArray((req.body || {}).roundtableIds) ? req.body.roundtableIds : [];
+      }
+    }
+
+    const { user, token } = await createInvite(email, { role, roundtableId, roundtableIds });
     const link = `${siteUrl(req)}/accept-invite.html?token=${encodeURIComponent(token)}`;
     const emailed = await sendEmail(
       email,

@@ -7,7 +7,7 @@ const crypto = require('crypto');
 process.env.AWS_USERS_TABLE = 'test-users-table';
 
 const { mockClient } = require('aws-sdk-client-mock');
-const { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, GetCommand, ScanCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const { hashPassword, verifyPassword } = require('../shared/passwords.js');
 const users = require('./users.js');
 
@@ -37,6 +37,60 @@ describe('createInvite', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].args[0].input).toEqual({ TableName: 'test-users-table', Item: user });
   });
+
+  test('lowercases the email regardless of how it was submitted', async () => {
+    ddbMock.on(PutCommand).resolves({});
+
+    const { user } = await users.createInvite('  Invitee@Example.COM  ');
+
+    expect(user.email).toBe('invitee@example.com');
+  });
+
+  test('defaults role to admin when omitted (accounts created before roles existed)', async () => {
+    ddbMock.on(PutCommand).resolves({});
+
+    const { user } = await users.createInvite('invitee@example.com');
+
+    expect(user.role).toBe('admin');
+    expect(user.roundtableId).toBeNull();
+    expect(user.roundtableIds).toEqual([]);
+  });
+
+  test('carries a chair role and roundtableId through, forcing roundtableIds empty', async () => {
+    ddbMock.on(PutCommand).resolves({});
+
+    const { user } = await users.createInvite('chair@example.com', {
+      role: 'chair',
+      roundtableId: 'rt-1',
+      roundtableIds: ['rt-should-be-ignored'],
+    });
+
+    expect(user.role).toBe('chair');
+    expect(user.roundtableId).toBe('rt-1');
+    expect(user.roundtableIds).toEqual([]);
+  });
+
+  test('carries a member role and roundtableIds through, forcing roundtableId null', async () => {
+    ddbMock.on(PutCommand).resolves({});
+
+    const { user } = await users.createInvite('member@example.com', {
+      role: 'member',
+      roundtableId: 'rt-should-be-ignored',
+      roundtableIds: ['rt-1', 'rt-2'],
+    });
+
+    expect(user.role).toBe('member');
+    expect(user.roundtableId).toBeNull();
+    expect(user.roundtableIds).toEqual(['rt-1', 'rt-2']);
+  });
+
+  test('a member invite with no roundtableIds defaults to an empty array, not undefined', async () => {
+    ddbMock.on(PutCommand).resolves({});
+
+    const { user } = await users.createInvite('member@example.com', { role: 'member' });
+
+    expect(user.roundtableIds).toEqual([]);
+  });
 });
 
 describe('acceptInvite', () => {
@@ -60,6 +114,21 @@ describe('acceptInvite', () => {
     expect(result.user.inviteTokenExpiresAt).toBeNull();
     expect(verifyPassword('s3cret-password', result.user.passwordHash)).toBe(true);
     expect(verifyPassword('wrong-password', result.user.passwordHash)).toBe(false);
+  });
+
+  test('carries role/roundtableId/roundtableIds from the invite onto the activated account unchanged', async () => {
+    ddbMock.on(PutCommand).resolves({});
+    const { user: pendingChair, token } = await users.createInvite('chair@example.com', {
+      role: 'chair',
+      roundtableId: 'rt-1',
+    });
+    ddbMock.on(ScanCommand).resolves({ Items: [pendingChair] });
+
+    const result = await users.acceptInvite(token, { firstName: 'Chair', lastName: 'Person', password: 'x'.repeat(10) });
+
+    expect(result.user.role).toBe('chair');
+    expect(result.user.roundtableId).toBe('rt-1');
+    expect(result.user.roundtableIds).toEqual([]);
   });
 
   test('rejects a well-formed but wrong token', async () => {
@@ -90,10 +159,44 @@ describe('acceptInvite', () => {
   });
 });
 
+describe('findUserByEmail', () => {
+  test('queries the email-index GSI, normalizing the input to lowercase', async () => {
+    const user = { id: 'u1', email: 'active@example.com', status: 'active' };
+    ddbMock.on(QueryCommand).resolves({ Items: [user] });
+
+    const result = await users.findUserByEmail('  Active@Example.COM  ');
+
+    expect(result).toEqual(user);
+    const calls = ddbMock.commandCalls(QueryCommand);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].args[0].input).toEqual({
+      TableName: 'test-users-table',
+      IndexName: 'email-index',
+      KeyConditionExpression: 'email = :email',
+      ExpressionAttributeValues: { ':email': 'active@example.com' },
+      Limit: 1,
+    });
+  });
+
+  test('returns null when no match is found', async () => {
+    ddbMock.on(QueryCommand).resolves({ Items: [] });
+
+    expect(await users.findUserByEmail('nobody@example.com')).toBeNull();
+  });
+
+  test('returns null for a blank email without querying', async () => {
+    expect(await users.findUserByEmail('   ')).toBeNull();
+    expect(ddbMock.commandCalls(QueryCommand)).toHaveLength(0);
+  });
+});
+
 describe('createPasswordReset + resetPassword', () => {
   test('round-trips: reset token is hashed at rest and resets to a verifiable new password', async () => {
     const activeUser = { id: 'u1', email: 'active@example.com', status: 'active', passwordHash: sha256('old') };
-    ddbMock.on(ScanCommand).resolves({ Items: [activeUser] });
+    // createPasswordReset looks the user up via findUserByEmail (the GSI
+    // query); resetPassword looks the token up via listAllRaw (a scan) —
+    // these are two different commands, so they need two different mocks.
+    ddbMock.on(QueryCommand).resolves({ Items: [activeUser] });
     ddbMock.on(PutCommand).resolves({});
 
     const resetResult = await users.createPasswordReset('active@example.com');
@@ -102,12 +205,6 @@ describe('createPasswordReset + resetPassword', () => {
     expect(resetUser.resetTokenHash).toBe(sha256(token));
     expect(resetUser.resetTokenHash).not.toBe(token);
 
-    // Re-mocking (rather than chaining .resolvesOnce()) is deliberate: each
-    // .on(...) call starts its own onCall(0) counter, so two separate
-    // .resolvesOnce() calls both target call #0 and the second silently
-    // clobbers the first instead of queuing behind it. A plain .resolves()
-    // replaces the default for every call from here on, which is exactly
-    // what's needed since there's only one more Scan call left to make.
     ddbMock.on(ScanCommand).resolves({ Items: [resetUser] });
     const finalResult = await users.resetPassword(token, 'brand-new-password');
 
@@ -118,13 +215,13 @@ describe('createPasswordReset + resetPassword', () => {
   });
 
   test('createPasswordReset returns null for an unknown email', async () => {
-    ddbMock.on(ScanCommand).resolves({ Items: [] });
+    ddbMock.on(QueryCommand).resolves({ Items: [] });
 
     expect(await users.createPasswordReset('nobody@example.com')).toBeNull();
   });
 
   test('createPasswordReset returns null for a pending (not yet active) account', async () => {
-    ddbMock.on(ScanCommand).resolves({
+    ddbMock.on(QueryCommand).resolves({
       Items: [{ id: 'u2', email: 'pending@example.com', status: 'pending' }],
     });
 
