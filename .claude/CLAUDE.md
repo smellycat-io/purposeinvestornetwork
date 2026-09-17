@@ -133,6 +133,14 @@ than guess — exact role boundaries (what a Chair can and can't do to a Member 
 their roundtable, exactly), field shapes, and permission edge cases are decisions, not
 implementation details, and shouldn't be invented silently.
 
+When a decision ships, update the relevant section to describe the current state
+directly — as if the design had always been this way — rather than appending a status
+label ("proposed" → "shipped"), a stage/PR reference, or narrative commentary about
+when or how it changed. If a part of the design isn't built yet, say so plainly (e.g.
+"not yet implemented") as a structural fact about the current codebase, not as a stage
+number or changelog entry. The test: someone reading this doc for the first time should
+learn the system as it stands, not the sequence of PRs that produced it.
+
 `README.md` carries its own version of this: a **Status** section stating what's built
 vs. in progress, with open questions logged there rather than silently resolved by
 whoever happens to be implementing. Update Status whenever a major feature ships or a
