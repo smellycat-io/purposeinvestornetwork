@@ -141,6 +141,14 @@ Code session) to tell whether the repo's docs match its actual state. Since
 `README.md` is currently out of sync (see below), the first Docs Sync task is bringing
 it in line with `docs/ARCHITECTURE.md` once that's written.
 
+**Periodic Staleness Check.** When working in an area of the repo — `infra/`, a given
+route file, a doc — briefly check whether adjacent files in that area still reflect
+reality: an unused CloudFormation template, a config file superseded by a workflow
+script, a comment describing behavior that's since changed. Flag what's found rather
+than silently trusting a file's presence as proof it's current. This isn't a scheduled
+audit and shouldn't turn into one — it's triggered by working in that area, not run on
+a timer or against the whole repo at once.
+
 ## Things to Avoid
 
 - No hand-rolled DynamoDB scan/put logic outside `Repository` — extend it if it's
