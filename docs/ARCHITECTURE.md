@@ -99,6 +99,14 @@ The CloudFormation templates in `private/infra/` are **not** all in active use:
 - **`cloudfront.yml`** is the one template genuinely reused — the same parameterized
   template backs both production's and staging's API Gateway stack.
 
+**Planned: Users-table email GSI.** The Admin/Chair/Member role rollout (see
+`docs/DATA-MODEL.md`'s Users section) adds an email-lookup GSI to the Users table to
+replace `findUserByEmail`/`acceptInvite`/password-reset's current scan-and-filter.
+Since `content-tables.yml` isn't applied by the deploy pipeline (see above), this GSI
+needs an explicit manual `aws dynamodb update-table` (or a `content-tables.yml` edit
+applied by hand) against both the production and staging tables when that work ships —
+it won't appear just because `docs/DATA-MODEL.md` documents it.
+
 Net effect: the real infrastructure state (Lambda config, IAM policies) lives in AWS,
 reconciled imperatively by the deploy workflows' inline scripts — there's no single
 checked-in CFN stack you could diff against to see current infra state. Treat
