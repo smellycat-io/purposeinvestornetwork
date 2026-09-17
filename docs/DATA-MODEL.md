@@ -163,9 +163,9 @@ default in-memory session store would bounce an already-logged-in admin back to
 ## API Endpoints (as currently implemented)
 
 All `/api/admin/*` and `/admin` routes are gated by `requireAdmin` (a flat
-`req.session.loggedIn` check) except the Users routes below, which are role-aware
-(`requireRole`, scoped per Role & Permission Model above) as of Stage 1/2. Everything
-else stays on `requireAdmin` until deliberately migrated in Stage 3.
+`req.session.loggedIn` check) except `POST /api/admin/users/invite`, which uses the
+role-aware `requireRole('admin', 'chair')` — see Role & Permission Model above.
+Everything else stays on `requireAdmin` until deliberately migrated in Stage 2/3.
 
 | Resource | Public | Admin (requireAdmin) |
 |---|---|---|
@@ -176,10 +176,10 @@ else stays on `requireAdmin` until deliberately migrated in Stage 3.
 | Investments | `GET /api/investments[/:slug]` | `GET/POST/PUT/DELETE /api/admin/investments[/:id]` |
 | Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` |
-| Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password`, `PATCH /api/users/me` (any logged-in role, not admin-only — see above) | `GET/POST /api/admin/users[/invite]`, `PATCH/DELETE /api/admin/users/:id` (all Chair-scoped per Role & Permission Model) |
+| Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET /api/admin/users`, `POST /api/admin/users/invite`, `DELETE /api/admin/users/:id` |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) |
 
-## Role & Permission Model — Stage 1 & 2 shipped, content-scoping in progress
+## Role & Permission Model — Stage 1 shipped, route-scoping in progress
 
 **Goal** (per Elise, current spec): three roles on the same Users table.
 - **Admin**: full access to everything and everyone; sends invites (chair or member type).
@@ -212,42 +212,18 @@ else stays on `requireAdmin` until deliberately migrated in Stage 3.
   `requireAdmin`) — see the API Endpoints table's Users row and the endpoint bullet
   below, which is now current-state rather than proposed.
 
-**Stage 2 — Chair-scoped Users management + self-service profile (shipped):**
-- `db/users.js` gains `updateUser(id, fields)` — a restricted whitelist
-  (`firstName`/`lastName`/`phone`/`address`/`role`/`roundtableId`/`roundtableIds`),
-  re-applying the same admin/chair/member invariant `createInvite` enforces whenever
-  `role` is part of the update. Returns the same safe public shape `listUsers()` does
-  (never `passwordHash` or a token field) — both now share one `toPublicUser` mapper.
-- `GET /api/admin/users` — `requireRole('admin', 'chair')`. Admin sees everyone; a
-  Chair sees only users with `role: 'member'` whose `roundtableIds` contains the
-  Chair's own `roundtableId` (`roundtableArrayContains`, from `shared/auth.js`).
-  Filtering happens in the route handler, not `listUsers()` itself — keeps `db/users.js`
-  role-agnostic, matching how `shared/access.js` keeps visibility filtering out of the
-  db layer.
-- `PATCH /api/admin/users/:id` (new) — `requireRole('admin', 'chair')`. Admin can
-  change any of `updateUser`'s fields. A Chair may act only on a target whose `role` is
-  `member` and whose `roundtableIds` already contains the Chair's own `roundtableId`
-  (403 otherwise), and may submit only `roundtableIds` — any other key in the body is
-  rejected (400), not silently dropped, since a partial silent success on a permission
-  boundary is worse than an explicit error. Within that, a Chair may add/remove only
-  *their own* Roundtable — changing any other Roundtable's membership on that user is
-  also rejected (400).
-- `DELETE /api/admin/users/:id` — same `requireRole`/scoping as the edit endpoint.
-  **Decision**: for a Chair, "remove" means removing the Member from the Chair's own
-  Roundtable (an edit to `roundtableIds`), never deleting the account outright — even
-  when it's the Member's only Roundtable. A Member can belong to several Roundtables,
-  and a Chair has no authority over that Member's standing with any Roundtable but
-  their own; full account deletion stays Admin-only, via the same endpoint. This wasn't
-  spelled out explicitly above, so it's recorded as a decision here rather than left
-  implicit in the code.
-- `PATCH /api/users/me` (new) — `requireRole('admin', 'chair', 'member')`, any logged-in
-  user edits their own `firstName`/`lastName`/`phone`/`address`. `role`/`roundtableId`/
-  `roundtableIds` are silently ignored if present rather than rejected (there's no
-  legitimate reason a self-edit would ever include them, unlike the Chair-boundary
-  cases above where an out-of-scope field signals an actual permission violation worth
-  surfacing). Always targets `req.session.userId`, never a body/param id.
-
-**Still proposed (Stage 3/5 — content + Member-facing area, not yet built):**
+**Still proposed (Stage 2/3 — route-scoping, not yet built):**
+- `GET /api/admin/users` — Admin sees all; Chair sees only Members whose `roundtableIds`
+  array contains the Chair's own `roundtableId` (array-contains, not equality, since a
+  Member can belong to several Roundtables).
+- `DELETE /api/admin/users/:id` (and a new edit endpoint, since Chairs need to manage,
+  not just remove) — same array-contains scoping: a Chair can only act on a Member whose
+  `roundtableIds` includes the Chair's Roundtable, 403 otherwise. Editing (not just
+  viewing) a Member's `roundtableIds` should let a Chair add/remove *their own*
+  Roundtable from the list, not touch other Roundtables the Member also belongs to.
+- New: `PATCH /api/users/me` — any logged-in user (any role) edits their own profile
+  fields (`firstName`, `lastName`, `phone`, `address`), replacing the implicit
+  admin-only assumption in the current Users routes.
 - **Chair content permissions on their own Roundtable:** `requireRole('admin',
   'chair')`-gated write access to that Roundtable's Initiatives, Posts, **and
   Investments**, scoped the same way as Users:
