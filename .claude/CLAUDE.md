@@ -218,6 +218,21 @@ a timer or against the whole repo at once.
   already checked out and appropriately named — don't build directly on `stage` or
   `main` even if not explicitly told to branch first
 
+## Reporting Back
+
+- **Final output goes in a copy-paste format.** When wrapping up a task — a summary of
+  what shipped, a PR description, exact commands or values Elise needs to act on
+  (AWS CLI commands, env var names/values, URLs) — present it as a fenced code block
+  rather than plain prose or GitHub-flavored markdown with inline bold/bullets. Prose
+  formatting doesn't paste cleanly outside GitHub; a code block does.
+- **Flag when staging verification is needed.** Before calling a PR ready to merge,
+  explicitly call out whether this change needs manual testing on
+  staging.purposeinvestornetwork.org before it's trusted — new deploy config, a schema
+  or GSI change, anything CloudFront/Lambda-environment-specific that the test suite
+  can't exercise. State this plainly in the PR description (e.g. 'Needs a staging pass
+  before merging to main: <specific reason>') rather than assuming it's implied by the
+  change touching infra-adjacent code.
+
 ## Comments & Documentation
 
 This codebase already comments *why*, not *what* — see the header comments in
