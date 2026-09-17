@@ -124,7 +124,11 @@ derived from `title`, suffixed.
 ### Users
 `AWS_USERS_TABLE` — currently PIN staff/admin accounts only (invite-based, email is the
 login identity). Invite and reset tokens: high-entropy random hex, emailed raw, only
-the SHA-256 hash stored.
+the SHA-256 hash stored. Reads are scan-all today (`db/users.js`'s own comment notes
+this holds because it's "a small table"); with Members expected to reach the thousands,
+an email-lookup GSI should be added as part of the role rollout rather than deferred —
+`findUserByEmail`/`acceptInvite`/password-reset all currently scan-and-filter by email,
+which is the specific query pattern the GSI would replace.
 
 | field | type | notes |
 |---|---|---|
@@ -219,17 +223,15 @@ invitee choosing their own role.
 - New: `PATCH /api/users/me` — any logged-in user (any role) edits their own profile
   fields (`firstName`, `lastName`, `phone`, `address`), replacing the implicit
   admin-only assumption in the current Users routes.
-- **New — Chair content permissions on their own Roundtable:** `requireRole('admin',
-  'chair')`-gated write access to that Roundtable's Initiatives and Posts, scoped the
-  same way as Users:
-  - Initiatives already carry `roundtableIds` — scoping is a direct array-contains
-    check against the Chair's `roundtableId`.
+- **Chair content permissions on their own Roundtable:** `requireRole('admin',
+  'chair')`-gated write access to that Roundtable's Initiatives, Posts, **and
+  Investments**, scoped the same way as Users:
+  - Initiatives and Investments already carry `roundtableIds` — scoping is a direct
+    array-contains check against the Chair's `roundtableId`.
   - Posts don't carry a Roundtable reference directly (only `initiativeId`) — scoping a
     Chair's write to a Post requires resolving `post.initiativeId` → that Initiative's
     `roundtableIds` → contains the Chair's `roundtableId`, mirroring the existing
     `listPostsForRoundtable` join logic rather than adding a redundant field to Posts.
-  - Whether this extends to Investments (which also carries `roundtableIds`) wasn't
-    specified — flagged below rather than assumed.
 - **New — Member-facing area** (`front-end/member/` or similar, distinct from
   `front-end/` public pages and `private/backend/admin/`):
   - Profile: reuses `PATCH /api/users/me` above
@@ -242,7 +244,7 @@ invitee choosing their own role.
   - Member news: reuses `update`-type Posts via `listPostsForRoundtable`, filtered to
     the Roundtables in the Member's `roundtableIds` — a Member with an empty
     `roundtableIds` sees `announcement`-type Posts only (general PIN news), not a
-    blank feed; confirm this default matches intent
+    blank feed
 
 ## Decisions & Open Questions
 
@@ -256,17 +258,12 @@ only living in chat history, and remaining questions are flagged rather than gue
   calendar, member news) — not the existing `/admin` dashboard.
 - A Chair also gets content-editing permissions for their own Roundtable's Initiatives
   and Posts, not just Member management.
+- Chair content-editing extends to Investments too, same `roundtableIds` array-contains
+  scoping as Initiatives.
+- A Member with an empty `roundtableIds` sees `announcement`-type Posts only in their
+  member news feed — no Roundtable-specific updates, not a blank feed.
+- Member volume is expected to reach the thousands, so the Users table gets an
+  email-lookup GSI as part of the role rollout rather than deferred until scan-all
+  becomes a problem in practice.
 
-**Still open:**
-1. **Does Chair content-editing extend to Investments?** Investments already carries
-   `roundtableIds` (same shape as Initiatives), so it's a low-cost extension of the same
-   scoping pattern if wanted — just wasn't part of the original spec, so not assumed.
-2. **What does an empty-`roundtableIds` Member's "member news" feed show?** Proposed
-   default above is general `announcement`-type Posts only, no Roundtable-specific
-   updates — confirm this matches intent before building the feed query.
-3. **Does Users staying a single scan-all table hold at Member scale?** `db/users.js`'s
-   own comment states scan-all works because it's "a small table (a handful of PIN
-   staff)." Members are the site's actual constituent base and could be a couple orders
-   of magnitude larger. Default: keep one table for now, add an email-lookup GSI once
-   volume actually warrants it — flag if Member counts in the thousands are expected
-   soon, since that'd argue for building the GSI in from the start instead.
+No open questions remain on this design — implementation can proceed.
