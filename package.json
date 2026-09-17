@@ -8,6 +8,11 @@
     "test": "jest",
     "package:backend": "mkdir -p private/dist && rm -f private/dist/backend.zip && cd private/backend && zip -rq ../dist/backend.zip . ../../package.json ../../package-lock.json ../../node_modules"
   },
+  "jest": {
+    "setupFiles": [
+      "<rootDir>/private/backend/test/setupEnv.js"
+    ]
+  },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.379.0",
     "@aws-sdk/client-s3": "^3.379.0",
@@ -21,6 +26,7 @@
     "serverless-http": "^3.1.0"
   },
   "devDependencies": {
+    "aws-sdk-client-mock": "^4.1.0",
     "jest": "^29.7.0",
     "supertest": "^6.3.3"
   }
