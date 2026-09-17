@@ -138,18 +138,6 @@ the SHA-256 hash stored.
 | `resetTokenHash` / `resetTokenExpiresAt` | string \| null | |
 | `createdAt` / `updatedAt` | ISO string | |
 
-`db/users.js`'s `listUsers()` deliberately never returns `passwordHash` — any new
-user-list endpoint (e.g. a Chair's scoped member list) should read through that
-function rather than scanning the table directly, so this stays true by construction
-instead of by remembering to strip it at each call site.
-
-> **Known data artifact**: the original admin account (migrated from the old
-> single-admin `ADMIN_USER`/`ADMIN_PASS` bootstrap scheme) still carries a leftover
-> `username` field on its row from before email became the login identity. It's inert —
-> nothing reads it — and no current code path writes a `username` field, so it won't
-> appear on any other row. Not worth a migration on its own; worth cleaning up if that
-> row is ever touched for another reason.
-
 ### Sessions
 `AWS_SESSIONS_TABLE` — `express-session` store backed by DynamoDB (`db/sessions.js`),
 not the app's own session logic. Necessary because Lambda can route concurrent
@@ -175,7 +163,7 @@ check (`req.session.loggedIn`), not role-aware.
 | Posts | `GET /api/posts[/:slug]`, `GET /api/education[/:slug]`, `GET /api/book`, `GET /api/updates[/:slug]` | `GET/POST/PUT/DELETE /api/admin/posts[/:id]` |
 | Press | `GET /api/press` | `GET/POST/PUT/DELETE /api/admin/press[/:id]` |
 | Investments | `GET /api/investments[/:slug]` | `GET/POST/PUT/DELETE /api/admin/investments[/:id]` |
-| Events | `GET /api/events[/:slug]` (`?conference=true` filters to the flagship series) | `GET/POST/PUT/DELETE /api/admin/events[/:id]` |
+| Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` |
 | Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET /api/admin/users`, `POST /api/admin/users/invite`, `DELETE /api/admin/users/:id` |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) |
@@ -185,19 +173,27 @@ check (`req.session.loggedIn`), not role-aware.
 **Goal** (per Elise, current spec): three roles on the same Users table.
 - **Admin**: full access to everything and everyone; sends invites (chair or member type).
 - **Chair**: assigned to one Roundtable; manages (view/invite/edit/remove) Members under
-  that Roundtable only.
-- **Member**: logs in only to view educational material and edit their own profile.
+  that Roundtable, and edits that Roundtable's own Initiatives and Posts.
+- **Member**: belongs to zero, one, or several Roundtables; logs into a dedicated
+  member area (profile, education content, events calendar, member news) rather than
+  the admin dashboard.
 
 **Proposed schema change** — add to the Users item:
 
 | field | type | notes |
 |---|---|---|
 | `role` | `admin` \| `chair` \| `member` | new |
-| `roundtableId` | string \| null | set for `chair` (their assigned roundtable) and `member` (see Open Questions — may need to be `roundtableIds: string[]` instead) |
+| `roundtableId` | string \| null | set for `chair` only (their one assigned roundtable); always `null` for `admin`/`member` |
+| `roundtableIds` | string[] | set for `member` only — zero, one, or many roundtables; always empty for `admin`/`chair` |
 
-`createInvite` extends to accept `role` and `roundtableId`, carried onto the invite item
-so `acceptInvite` sets them on the resulting user record without the invitee choosing
-their own role.
+Two separate fields rather than reusing one, since Chair is deliberately singular
+(assigned to exactly one Roundtable) while Member is deliberately variable (can belong
+to several or none) — collapsing them into one shape would blur that distinction and
+make scoping checks branch on role anyway.
+
+`createInvite` extends to accept `role` and `roundtableId`/`roundtableIds`, carried onto
+the invite item so `acceptInvite` sets them on the resulting user record without the
+invitee choosing their own role.
 
 **Proposed auth change** — `shared/auth.js` gets role-aware middleware alongside
 `requireAdmin`, not replacing it:
@@ -207,40 +203,70 @@ their own role.
   call to filter results/writes to `user.roundtableId === req.session.roundtableId`
 
 **Proposed endpoint changes:**
-- `POST /api/admin/users/invite` — body gains `role` + `roundtableId`. Server validates
-  the requester can issue that role: Admin can invite `chair` (any roundtable) or
-  `member`; Chair can only invite `member`, `roundtableId` forced to the Chair's own,
-  ignoring any value they send.
-- `GET /api/admin/users` — Admin sees all; Chair sees only users with matching
-  `roundtableId`.
+- `POST /api/admin/users/invite` — body gains `role` + `roundtableId` (chair) or
+  `roundtableIds` (member, can be `[]`). Server validates the requester can issue that
+  role: Admin can invite `chair` (any roundtable) or `member` (any roundtables or none);
+  Chair can only invite `member`, and the invite is forced to include the Chair's own
+  `roundtableId` in the new member's `roundtableIds` regardless of what's submitted.
+- `GET /api/admin/users` — Admin sees all; Chair sees only Members whose `roundtableIds`
+  array contains the Chair's own `roundtableId` (array-contains, not equality, since a
+  Member can belong to several Roundtables).
 - `DELETE /api/admin/users/:id` (and a new edit endpoint, since Chairs need to manage,
-  not just remove) — same scoping: Chair can only act on users under their own
-  Roundtable, 403 otherwise.
-- New: `PATCH /api/users/me` (or similar) — any logged-in user edits their own profile
+  not just remove) — same array-contains scoping: a Chair can only act on a Member whose
+  `roundtableIds` includes the Chair's Roundtable, 403 otherwise. Editing (not just
+  viewing) a Member's `roundtableIds` should let a Chair add/remove *their own*
+  Roundtable from the list, not touch other Roundtables the Member also belongs to.
+- New: `PATCH /api/users/me` — any logged-in user (any role) edits their own profile
   fields (`firstName`, `lastName`, `phone`, `address`), replacing the implicit
   admin-only assumption in the current Users routes.
-- New: a Member-facing landing route distinct from `/admin` — see Open Questions.
+- **New — Chair content permissions on their own Roundtable:** `requireRole('admin',
+  'chair')`-gated write access to that Roundtable's Initiatives and Posts, scoped the
+  same way as Users:
+  - Initiatives already carry `roundtableIds` — scoping is a direct array-contains
+    check against the Chair's `roundtableId`.
+  - Posts don't carry a Roundtable reference directly (only `initiativeId`) — scoping a
+    Chair's write to a Post requires resolving `post.initiativeId` → that Initiative's
+    `roundtableIds` → contains the Chair's `roundtableId`, mirroring the existing
+    `listPostsForRoundtable` join logic rather than adding a redundant field to Posts.
+  - Whether this extends to Investments (which also carries `roundtableIds`) wasn't
+    specified — flagged below rather than assumed.
+- **New — Member-facing area** (`front-end/member/` or similar, distinct from
+  `front-end/` public pages and `private/backend/admin/`):
+  - Profile: reuses `PATCH /api/users/me` above
+  - Education: `GET /api/education[/:slug]` already exists — once `shared/access.js`'s
+    `canSeeFull` is wired to check `req.session.role` (any logged-in role, not just
+    `member`, should see full `memberOnly` content), Members get the full body instead
+    of the redacted preview automatically, no new endpoint needed
+  - Calendar: `GET /api/events` already exists and isn't Roundtable-scoped in the
+    current schema, so this is just the existing public events list, no new endpoint
+  - Member news: reuses `update`-type Posts via `listPostsForRoundtable`, filtered to
+    the Roundtables in the Member's `roundtableIds` — a Member with an empty
+    `roundtableIds` sees `announcement`-type Posts only (general PIN news), not a
+    blank feed; confirm this default matches intent
 
-## Open Questions
+## Decisions & Open Questions
 
-Per the Docs Sync rule in `CLAUDE.md` — these are decisions, not implementation
-details, and shouldn't get guessed at mid-build:
+Per the Docs Sync rule in `CLAUDE.md` — resolved decisions are recorded here rather than
+only living in chat history, and remaining questions are flagged rather than guessed at.
 
-1. **Can a Member belong to more than one Roundtable?** If yes, `roundtableId` on Users
-   needs to be `roundtableIds: string[]` (matching the Initiatives/Investments pattern
-   already used elsewhere), and Chair-scoping becomes an array-contains check instead of
-   equality.
-2. **Does Users staying a single scan-all table hold at Member scale?** `db/users.js`'s
+**Resolved:**
+- A Member can belong to multiple Roundtables, or none — hence `roundtableIds: string[]`
+  on Users rather than a singular field (a Chair stays singular: `roundtableId`).
+- Members land in a dedicated member-only area on login (profile, education, events
+  calendar, member news) — not the existing `/admin` dashboard.
+- A Chair also gets content-editing permissions for their own Roundtable's Initiatives
+  and Posts, not just Member management.
+
+**Still open:**
+1. **Does Chair content-editing extend to Investments?** Investments already carries
+   `roundtableIds` (same shape as Initiatives), so it's a low-cost extension of the same
+   scoping pattern if wanted — just wasn't part of the original spec, so not assumed.
+2. **What does an empty-`roundtableIds` Member's "member news" feed show?** Proposed
+   default above is general `announcement`-type Posts only, no Roundtable-specific
+   updates — confirm this matches intent before building the feed query.
+3. **Does Users staying a single scan-all table hold at Member scale?** `db/users.js`'s
    own comment states scan-all works because it's "a small table (a handful of PIN
    staff)." Members are the site's actual constituent base and could be a couple orders
-   of magnitude larger. Worth deciding now whether Members share this table (needs an
-   email GSI instead of scan-all once volume grows) or get their own table.
-3. **Where does a Member land after login?** The current `/admin` dashboard and its
-   `admin.html`/`admin.js` are built entirely for staff CRUD. A Member logging in needs
-   a different landing experience (educational content + their own profile), which
-   doesn't exist yet as a front-end area — separate route/page, not just a permission
-   check on the existing dashboard.
-4. **Does a Chair get any content permissions** (editing their Roundtable's Initiatives
-   or Posts), or is Chair strictly people-management as specced? Current spec says
-   "manage members" — nothing about content — but worth confirming before scoping
-   `requireRole('chair')` only onto the Users routes.
+   of magnitude larger. Default: keep one table for now, add an email-lookup GSI once
+   volume actually warrants it — flag if Member counts in the thousands are expected
+   soon, since that'd argue for building the GSI in from the start instead.
