@@ -137,9 +137,10 @@ implementation details, and shouldn't be invented silently.
 vs. in progress, with open questions logged there rather than silently resolved by
 whoever happens to be implementing. Update Status whenever a major feature ships or a
 new open question surfaces — it's the fastest way for anyone (including a future Claude
-Code session) to tell whether the repo's docs match its actual state. Since
-`README.md` is currently out of sync (see below), the first Docs Sync task is bringing
-it in line with `docs/ARCHITECTURE.md` once that's written.
+Code session) to tell whether the repo's docs match its actual state. `docs/ARCHITECTURE.md`
+and `docs/DATA-MODEL.md` now exist — `README.md` is still the original SQLite-prototype
+version (see Avoiding Duplicate Code & Bloat below), so the next Docs Sync task is
+bringing its Status section in line with them.
 
 **Periodic Staleness Check.** When working in an area of the repo — `infra/`, a given
 route file, a doc — briefly check whether adjacent files in that area still reflect
