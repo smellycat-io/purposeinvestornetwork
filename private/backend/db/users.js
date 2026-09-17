@@ -1,18 +1,34 @@
-// Admin user accounts — invites, login lookup, and password reset. Email is
-// the login identity (no separate username). Small table (a handful of PIN
-// staff), so scan-all matches the convention already used by
-// content.js/settings.js rather than needing an email index.
+// User accounts — invites, login lookup, and password reset — for Admin,
+// Chair, and Member roles (see docs/DATA-MODEL.md's Role & Permission
+// Model). Email is the login identity (no separate username).
 //
 // Invite and reset tokens are generated as high-entropy random hex, emailed
 // as the raw value, but only their SHA-256 hash is ever stored here — a
 // DynamoDB read (or leak) alone can't be replayed as a usable link.
+//
+// Login lookup (findUserByEmail) queries the `email-index` GSI rather than
+// scanning — Member volume is expected to reach the thousands, unlike the
+// handful of PIN staff this table originally held. Every other lookup here
+// (invite/reset token matching) stays scan-and-filter: tokens aren't a
+// queryable key, and invite/reset volume stays low regardless of Member
+// count. **The GSI must exist on the table before this code is deployed**
+// (see docs/ARCHITECTURE.md's Users-table GSI note for the exact command) —
+// querying a nonexistent index throws, and this is the login path.
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const {
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  ScanCommand,
+  DeleteCommand,
+  QueryCommand,
+} = require('@aws-sdk/lib-dynamodb');
 const crypto = require('crypto');
 const { hashPassword, verifyPassword } = require('../shared/passwords.js');
 
 const AWS_REGION = process.env.AWS_REGION || undefined;
 const USERS_TABLE = process.env.AWS_USERS_TABLE || null;
+const EMAIL_INDEX = 'email-index';
 
 let docClient = null;
 function getDocClient() {
@@ -41,10 +57,20 @@ function tokenMatches(candidateHash, storedHash) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-async function listUsers() {
-  if (!USERS_TABLE) return [];
-  const result = await getDocClient().send(new ScanCommand({ TableName: USERS_TABLE }));
-  return (result.Items || []).map((u) => ({
+// Emails are always stored lowercase (enforced here, at the one place a
+// user item is first created) so the email-index GSI query below is a
+// plain equality match — the old scan-and-filter did the case-folding at
+// read time instead, which a Query against an index can't do.
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+// The public shape of a user record — never includes passwordHash or any
+// token field. listUsers/updateUser both return through this so that stays
+// true by construction instead of by remembering to strip it at each call
+// site (same reasoning as listUsers's original passwordHash omission).
+function toPublicUser(u) {
+  return {
     id: u.id,
     email: u.email,
     firstName: u.firstName || null,
@@ -52,19 +78,37 @@ async function listUsers() {
     phone: u.phone || null,
     address: u.address || null,
     status: u.status,
+    role: u.role || null,
+    roundtableId: u.roundtableId || null,
+    roundtableIds: u.roundtableIds || [],
     createdAt: u.createdAt,
-  }));
+  };
+}
+
+async function listUsers() {
+  if (!USERS_TABLE) return [];
+  const result = await getDocClient().send(new ScanCommand({ TableName: USERS_TABLE }));
+  return (result.Items || []).map(toPublicUser);
 }
 
 async function getUserById(id) {
-  if (!USERS_TABLE) return null;
+  if (!USERS_TABLE || !id) return null;
   const result = await getDocClient().send(new GetCommand({ TableName: USERS_TABLE, Key: { id } }));
   return result.Item || null;
 }
 
 async function findUserByEmail(email) {
-  const items = await listAllRaw();
-  return items.find((u) => u.email && u.email.toLowerCase() === String(email || '').toLowerCase()) || null;
+  if (!USERS_TABLE) return null;
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const result = await getDocClient().send(new QueryCommand({
+    TableName: USERS_TABLE,
+    IndexName: EMAIL_INDEX,
+    KeyConditionExpression: 'email = :email',
+    ExpressionAttributeValues: { ':email': normalized },
+    Limit: 1,
+  }));
+  return (result.Items && result.Items[0]) || null;
 }
 
 async function listAllRaw() {
@@ -74,12 +118,22 @@ async function listAllRaw() {
 }
 
 // Creates a pending invite. Personal info is deliberately not set here —
-// the invitee fills it in themselves when they accept.
-async function createInvite(email) {
+// the invitee fills it in themselves when they accept. `role` defaults to
+// 'admin' when omitted, matching every account created before roles
+// existed — callers created going forward (routes/users.js) always pass
+// role explicitly. roundtableId/roundtableIds are normalized here (not
+// trusted from the caller) so the admin/chair/member invariant from
+// docs/DATA-MODEL.md — a Chair's roundtableId is always null for other
+// roles, a Member's roundtableIds is always empty for other roles — holds
+// regardless of what a caller passes.
+async function createInvite(email, { role = 'admin', roundtableId = null, roundtableIds = [] } = {}) {
   const token = makeToken();
   const item = {
     id: makeId(),
-    email,
+    email: normalizeEmail(email),
+    role,
+    roundtableId: role === 'chair' ? roundtableId : null,
+    roundtableIds: role === 'member' ? (roundtableIds || []) : [],
     status: 'pending',
     inviteTokenHash: hashToken(token),
     inviteTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days
@@ -161,6 +215,38 @@ async function deleteUser(id) {
   await getDocClient().send(new DeleteCommand({ TableName: USERS_TABLE, Key: { id } }));
 }
 
+// The only fields any caller (Admin editing another user, a Chair editing
+// a Member's roundtableIds, or a user editing their own profile) is ever
+// allowed to touch — status/tokens/passwordHash all have their own
+// dedicated functions above and are deliberately not editable here.
+// Route-level code (routes/users.js) decides which subset of *these* a
+// given requester's role may actually submit; this is the outer bound, not
+// the permission check itself.
+const UPDATABLE_FIELDS = ['firstName', 'lastName', 'phone', 'address', 'role', 'roundtableId', 'roundtableIds'];
+
+async function updateUser(id, fields) {
+  const existing = await getUserById(id);
+  if (!existing) return null;
+
+  const updates = {};
+  for (const key of UPDATABLE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(fields, key)) updates[key] = fields[key];
+  }
+
+  // Same admin/chair/member invariant createInvite enforces at creation —
+  // re-applied here only when `role` is actually part of *this* update, so
+  // an unrelated field edit (e.g. just `phone`) can't silently wipe an
+  // existing roundtableId/roundtableIds.
+  if (Object.prototype.hasOwnProperty.call(updates, 'role')) {
+    if (updates.role !== 'chair') updates.roundtableId = null;
+    if (updates.role !== 'member') updates.roundtableIds = [];
+  }
+
+  const item = { ...existing, ...updates, id, updatedAt: new Date().toISOString() };
+  await getDocClient().send(new PutCommand({ TableName: USERS_TABLE, Item: item }));
+  return toPublicUser(item);
+}
+
 module.exports = {
   listUsers,
   getUserById,
@@ -170,5 +256,6 @@ module.exports = {
   createPasswordReset,
   resetPassword,
   updateOwnPassword,
+  updateUser,
   deleteUser,
 };
