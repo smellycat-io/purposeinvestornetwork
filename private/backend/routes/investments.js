@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireAdmin, requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { filterVisible, canSeeFull } = require('../shared/access.js');
 const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
@@ -36,10 +36,16 @@ router.get(
   }, 'Unable to load investments.')
 );
 
+// Same create/edit/delete scoping shape as routes/initiatives.js — see its
+// comments for why create validates the submitted roundtableIds while
+// edit/delete check the existing item's roundtableIds instead.
 router.post(
   '/api/admin/investments',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
+    if (req.session.role === 'chair' && !roundtableArrayContains(req.body.roundtableIds, req.session.roundtableId)) {
+      return res.status(403).json({ error: 'Not authorized to create an Investment outside your Roundtable.' });
+    }
     const payload = {
       ...req.body,
       description: sanitizeRichText(req.body.description),
@@ -53,16 +59,37 @@ router.post(
 
 router.put(
   '/api/admin/investments/:id',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
+    const existing = await content.getInvestmentById(req.params.id);
+    if (!existing) {
+      captureMessage(`Investment update 404: id "${req.params.id}" not found`, 'warning');
+      return res.status(404).json({ error: 'Not found.' });
+    }
+
+    if (req.session.role === 'chair') {
+      const chairRoundtableId = req.session.roundtableId;
+      if (!roundtableArrayContains(existing.roundtableIds, chairRoundtableId)) {
+        return res.status(403).json({ error: 'Not authorized to edit this Investment.' });
+      }
+      if (Object.prototype.hasOwnProperty.call(req.body, 'roundtableIds')) {
+        if (!Array.isArray(req.body.roundtableIds)) {
+          return res.status(400).json({ error: 'roundtableIds must be an array.' });
+        }
+        const currentOther = (existing.roundtableIds || []).filter((rt) => rt !== chairRoundtableId);
+        const submittedOther = req.body.roundtableIds.filter((rt) => rt !== chairRoundtableId);
+        const otherRoundtablesUnchanged =
+          currentOther.length === submittedOther.length && currentOther.every((rt) => submittedOther.includes(rt));
+        if (!otherRoundtablesUnchanged) {
+          return res.status(400).json({ error: 'Chairs can only add or remove their own Roundtable.' });
+        }
+      }
+    }
+
     const updates = { ...req.body };
     if (updates.description) updates.description = sanitizeRichText(updates.description);
     if (updates.outcomeSummary) updates.outcomeSummary = sanitizeRichText(updates.outcomeSummary);
     const investment = await content.updateInvestment(req.params.id, updates);
-    if (!investment) {
-      captureMessage(`Investment update 404: id "${req.params.id}" not found`, 'warning');
-      return res.status(404).json({ error: 'Not found.' });
-    }
     captureMessage(`Investment updated — id: ${investment.id}, title: "${investment.title}"`, 'info');
     res.json(investment);
   }, 'Unable to update investment.')
@@ -70,8 +97,15 @@ router.put(
 
 router.delete(
   '/api/admin/investments/:id',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
+    if (req.session.role === 'chair') {
+      const existing = await content.getInvestmentById(req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Not found.' });
+      if (!roundtableArrayContains(existing.roundtableIds, req.session.roundtableId)) {
+        return res.status(403).json({ error: 'Not authorized to delete this Investment.' });
+      }
+    }
     await content.deleteInvestment(req.params.id);
     captureMessage(`Investment deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();

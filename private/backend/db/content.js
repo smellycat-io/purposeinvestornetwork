@@ -48,6 +48,7 @@ const deleteRoundtable = (id) => roundtables.delete(id);
 
 const listInitiatives = () => initiatives.list();
 const getInitiativeBySlug = (slug) => initiatives.getBySlug(slug);
+const getInitiativeById = (id) => initiatives.getById(id);
 const listInitiativesForRoundtable = (roundtableId) =>
   initiatives.list((i) => Array.isArray(i.roundtableIds) && i.roundtableIds.includes(roundtableId));
 const createInitiative = ({ title, description, roundtableIds, imageUrl }) =>
@@ -75,6 +76,7 @@ async function listPostsForRoundtable(roundtableId) {
 }
 
 const getPostBySlug = (slug) => posts.getBySlug(slug);
+const getPostById = (id) => posts.getById(id);
 
 function createPost({ title, body, type, initiativeId, author, memberOnly, excerpt, imageUrl, purchaseUrl, price }) {
   const postType = POST_TYPES.includes(type) ? type : 'blog';
@@ -124,6 +126,7 @@ const deletePress = (id) => press.delete(id);
 
 const listInvestments = () => investments.list();
 const getInvestmentBySlug = (slug) => investments.getBySlug(slug);
+const getInvestmentById = (id) => investments.getById(id);
 const createInvestment = ({ title, initiativeId, roundtableIds, status, description, outcomeSummary, imageUrl, memberOnly }) =>
   investments.create({
     title,
@@ -181,6 +184,7 @@ module.exports = {
   deleteRoundtable,
   listInitiatives,
   getInitiativeBySlug,
+  getInitiativeById,
   listInitiativesForRoundtable,
   createInitiative,
   updateInitiative,
@@ -188,6 +192,7 @@ module.exports = {
   listPosts,
   listPostsForRoundtable,
   getPostBySlug,
+  getPostById,
   createPost,
   updatePost,
   deletePost,
@@ -197,6 +202,7 @@ module.exports = {
   deletePress,
   listInvestments,
   getInvestmentBySlug,
+  getInvestmentById,
   createInvestment,
   updateInvestment,
   deleteInvestment,
