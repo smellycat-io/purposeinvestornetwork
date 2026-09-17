@@ -163,20 +163,21 @@ default in-memory session store would bounce an already-logged-in admin back to
 ## API Endpoints
 
 Every route under `/api/admin/*` and the `/admin` page is gated by `requireAdmin` (a
-flat `req.session.loggedIn` check, no role distinction) except the Users endpoints,
+flat `req.session.loggedIn` check, no role distinction) except the Users endpoints and
+the write endpoints (`POST`/`PUT`/`DELETE`) on Initiatives, Posts, and Investments,
 which use the role-aware `requireRole` middleware — see Role & Permission Model below
-for exactly which roles reach which Users endpoint and how Chair access is scoped.
-Roundtables, Initiatives, Posts, Press, Investments, Events, and Images are not yet
-migrated to role-aware access; every session that reaches them is treated as equally
-privileged.
+for exactly which roles reach which endpoint and how Chair access is scoped. The `GET`
+list/read endpoints on every resource, and all of Roundtables/Press/Events/Images, are
+not yet migrated to role-aware access; every session that reaches them is treated as
+equally privileged.
 
 | Resource | Public | Admin / role-gated |
 |---|---|---|
 | Roundtables | `GET /api/roundtables`, `GET /api/roundtables/:slug` | `POST/PUT/DELETE /api/admin/roundtables[/:id]` (requireAdmin) |
-| Initiatives | `GET /api/initiatives/:slug` | `GET/POST/PUT/DELETE /api/admin/initiatives[/:id]` (requireAdmin) |
-| Posts | `GET /api/posts[/:slug]`, `GET /api/education[/:slug]`, `GET /api/book`, `GET /api/updates[/:slug]` | `GET/POST/PUT/DELETE /api/admin/posts[/:id]` (requireAdmin) |
+| Initiatives | `GET /api/initiatives/:slug` | `GET /api/admin/initiatives[/:id]` (requireAdmin); `POST/PUT/DELETE /api/admin/initiatives[/:id]` — Admin or Chair, scoped per Role & Permission Model below |
+| Posts | `GET /api/posts[/:slug]`, `GET /api/education[/:slug]`, `GET /api/book`, `GET /api/updates[/:slug]` | `GET /api/admin/posts[/:id]` (requireAdmin); `POST/PUT/DELETE /api/admin/posts[/:id]` — Admin or Chair, scoped per Role & Permission Model below |
 | Press | `GET /api/press` | `GET/POST/PUT/DELETE /api/admin/press[/:id]` (requireAdmin) |
-| Investments | `GET /api/investments[/:slug]` | `GET/POST/PUT/DELETE /api/admin/investments[/:id]` (requireAdmin) |
+| Investments | `GET /api/investments[/:slug]` | `GET /api/admin/investments[/:id]` (requireAdmin); `POST/PUT/DELETE /api/admin/investments[/:id]` — Admin or Chair, scoped per Role & Permission Model below |
 | Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` (requireAdmin) |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` (requireAdmin) |
 | Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite` — Admin or Chair, scoped per Role & Permission Model below; `PATCH /api/users/me` — any logged-in role |
@@ -189,7 +190,8 @@ defaulting rules):
 - **Admin** — full access to everything and everyone; can invite a Chair or a Member.
 - **Chair** — assigned to exactly one Roundtable (`roundtableId`); manages Members
   under that Roundtable (view, invite, edit that Member's membership in their own
-  Roundtable, remove from their own Roundtable).
+  Roundtable, remove from their own Roundtable) and has write access to that
+  Roundtable's own Initiatives, Posts, and Investments.
 - **Member** — belongs to zero, one, or several Roundtables (`roundtableIds`, an array
   since a Member can belong to more than one, unlike a Chair's singular
   `roundtableId`).
@@ -212,13 +214,16 @@ Endpoints above):
   `requireRole` returns JSON 401 (not logged in) or 403 (wrong role) for `/api/*`
   routes and redirects to `/login` for page routes, since a role-gated `fetch()` call
   needs a real error to branch on.
-- `roundtableArrayContains(roundtableIds, chairRoundtableId)` — Chair-to-Member
-  array-contains check (a Member's `roundtableIds` can include several Roundtables; a
-  Chair matches if their one Roundtable is among them). Used by the Users routes below.
+- `roundtableArrayContains(roundtableIds, chairRoundtableId)` — array-contains check (an
+  item's `roundtableIds`, or a Member's, can include several Roundtables; a Chair
+  matches if their one Roundtable is among them). Used by the Users routes below and by
+  Initiatives/Posts/Investments write-scoping.
 - `matchesRoundtable(chairRoundtableId, targetRoundtableId)` — Chair-to-single-item
-  equality check, for scoping a Chair's write access to one Roundtable's own content.
-  Implemented and unit-tested but not yet called from any route — see "Not yet
-  implemented" below.
+  equality check, for an item with a single `roundtableId` rather than an array.
+  Implemented and unit-tested but not yet called from any route — every content type a
+  Chair currently has write access to (Initiatives, Posts via their Initiative,
+  Investments) uses the array shape instead, so `roundtableArrayContains` covers all of
+  them.
 
 **Invites (`POST /api/admin/users/invite`, `requireRole('admin', 'chair')`).** An Admin
 can invite a Chair (any `roundtableId`) or a Member (any `roundtableIds`, including
@@ -264,16 +269,38 @@ boundary worth surfacing an error for (unlike the Chair-on-Member PATCH above, w
 disallowed field is rejected outright). The target is always `req.session.userId`,
 never a body/param-supplied id, so this endpoint can never edit anyone else's record.
 
+**Chair content access — Initiatives and Investments (`POST/PUT/DELETE
+/api/admin/initiatives[/:id]`, `POST/PUT/DELETE /api/admin/investments[/:id]`, both
+`requireRole('admin', 'chair')`).** Both tables carry `roundtableIds` directly. A Chair
+has no authority over any Roundtable but their own, on create or afterward: on create,
+there's no existing item to check yet, so a Chair is authorized by the `roundtableIds`
+they submit — that array must be exactly their own Roundtable, not their own plus
+others. On edit and delete, authorization checks the *existing* item's current
+`roundtableIds` (`roundtableArrayContains`), never the request body — a PUT body could
+otherwise move an item a Chair doesn't own into scope, or omit `roundtableIds` and be
+treated as unrestricted. If an edit's body touches `roundtableIds` at all, the same
+rule the "Editing a user" endpoint above applies to a Member's `roundtableIds` applies
+here too: a Chair may add or remove only their own Roundtable, never another
+Roundtable's presence on the item (rejected with 400, not silently dropped). The `GET`
+list/read endpoints on both tables are unchanged — still flat `requireAdmin`, returning
+every item regardless of role.
+
+**Chair content access — Posts (`POST/PUT/DELETE /api/admin/posts[/:id]`,
+`requireRole('admin', 'chair')`).** Posts don't carry a Roundtable reference directly,
+only `initiativeId`, so a Chair's write access is authorized by resolving
+`post.initiativeId` → that Initiative's `roundtableIds` → contains the Chair's
+`roundtableId`, mirroring the `listPostsForRoundtable` join logic already used for
+reads rather than adding a redundant field to Posts. Only `type: 'update'` Posts are
+tied to an Initiative at all (`createPost` forces `initiativeId` to `null` for every
+other type), so a Chair can create, edit, or delete `update`-type Posts on an Initiative
+in their scope only — never a `blog`/`education`/`announcement`/`book` Post, which has
+no Roundtable to scope against. On edit, a Chair's body may not change `type` away from
+`update`, and may not move `initiativeId` to an Initiative outside their own Roundtable
+— both rejected with 400, for the same reason a Chair can't touch another Roundtable's
+`roundtableIds` on an Initiative/Investment edit. The `GET /api/admin/posts` list
+endpoint is unchanged — still flat `requireAdmin`.
+
 **Not yet implemented:**
-- Chair write access to their own Roundtable's Initiatives, Posts, and Investments —
-  Initiatives, Posts, and Investments all still use flat `requireAdmin` (see API
-  Endpoints above). Initiatives and Investments already carry `roundtableIds`, so
-  scoping would be a direct array-contains/`matchesRoundtable` check against the
-  Chair's `roundtableId`; Posts don't carry a Roundtable reference directly (only
-  `initiativeId`), so scoping a Chair's write to a Post would mean resolving
-  `post.initiativeId` → that Initiative's `roundtableIds` → contains the Chair's
-  `roundtableId`, mirroring the existing `listPostsForRoundtable` join logic rather
-  than adding a redundant field to Posts.
 - A Member-facing area (e.g. `front-end/member/`, distinct from the public `front-end/`
   pages and the admin dashboard in `private/backend/admin/`): profile (would reuse
   `PATCH /api/users/me` above), education content, an events calendar, and a member

@@ -6,7 +6,9 @@ function requireAdmin(req, res, next) {
 }
 
 // Role-aware, alongside requireAdmin rather than replacing it — routes not
-// yet migrated (Stage 2/3) keep using requireAdmin as-is.
+// yet migrated to role-aware access (Roundtables, Press, Events, Images,
+// and the GET list/read endpoints on every resource) keep using
+// requireAdmin as-is.
 //
 // requireAdmin always redirects, even for /api/* callers, since it predates
 // there being any distinction worth making (every session was equally
@@ -34,18 +36,24 @@ function requireRole(...roles) {
   };
 }
 
-// Chair-to-single-roundtable equality check — e.g. a Chair editing their
-// own Roundtable's Initiatives/Posts (Stage 2/3). `!!chairRoundtableId`
-// guards against a null-matches-null false positive: an Admin (or anyone
-// else with no roundtableId) must never "match" an item that also has no
+// Chair-to-single-item equality check, for an item with one `roundtableId`
+// field rather than an array. Not currently called from any route —
+// Initiatives, Posts (via their Initiative), and Investments all use the
+// array shape below instead — but kept for the next content type that
+// carries a singular Roundtable reference. `!!chairRoundtableId` guards
+// against a null-matches-null false positive: an Admin (or anyone else
+// with no roundtableId) must never "match" an item that also has no
 // roundtableId set.
 function matchesRoundtable(chairRoundtableId, targetRoundtableId) {
   return !!chairRoundtableId && chairRoundtableId === targetRoundtableId;
 }
 
-// Chair-to-Member array-contains check — a Member's roundtableIds can
-// include several Roundtables; a Chair matches if their one Roundtable is
-// among them (Stage 2/3's Chair-scoped member list/management).
+// Chair-to-array-of-roundtables check — a Member's roundtableIds, or an
+// Initiative/Investment's, can include several Roundtables; a Chair
+// matches if their one Roundtable is among them. Used both for Chair-scoped
+// Member list/management (routes/users.js) and Chair-scoped content writes
+// on Initiatives, Posts, and Investments (routes/initiatives.js,
+// routes/posts.js, routes/investments.js).
 function roundtableArrayContains(roundtableIds, chairRoundtableId) {
   return !!chairRoundtableId && Array.isArray(roundtableIds) && roundtableIds.includes(chairRoundtableId);
 }
