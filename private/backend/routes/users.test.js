@@ -285,6 +285,51 @@ describe('DELETE /api/admin/users/:id', () => {
   });
 });
 
+describe('GET /api/users/me', () => {
+  test('a Member gets their own profile, including role and roundtableIds', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-ab@example.com');
+
+    const res = await agent.get('/api/users/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('member-ab');
+    expect(res.body.role).toBe('member');
+    expect(res.body.roundtableIds).toEqual(['rt-A', 'rt-B']);
+  });
+
+  test('a Chair gets their own profile, including roundtableId', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('chair-a@example.com');
+
+    const res = await agent.get('/api/users/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('chair-a');
+    expect(res.body.role).toBe('chair');
+    expect(res.body.roundtableId).toBe('rt-A');
+  });
+
+  test('never returns passwordHash or token fields', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.get('/api/users/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body.passwordHash).toBeUndefined();
+    expect(res.body.inviteTokenHash).toBeUndefined();
+  });
+
+  test('a logged-out request is rejected', async () => {
+    seedUsers(freshRoster());
+
+    const res = await request(app).get('/api/users/me');
+
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('PATCH /api/users/me', () => {
   test('a Member can edit their own profile fields', async () => {
     seedUsers(freshRoster());
