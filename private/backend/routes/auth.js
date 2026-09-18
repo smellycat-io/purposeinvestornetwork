@@ -44,7 +44,23 @@ router.post('/login', async (req, res) => {
     // a real account of the same address — reporting *which* path a login
     // was checked against is the single most useful fact for diagnosing "my
     // password doesn't work," without ever logging the password itself.
-    const user = await findUserByEmail(email);
+    //
+    // findUserByEmail gets its own try/catch, separate from the one around
+    // this whole handler: a DynamoDB failure here (the 2026-09-17 incident —
+    // the email-index GSI wasn't provisioned before Stage 1 deployed) must
+    // fall through to the bootstrap check below, exactly as if no user
+    // record existed, not abort the request. The outer catch below stays
+    // for genuinely unexpected failures elsewhere in this handler; it must
+    // never be the thing standing between a broken Users-table lookup and
+    // the bootstrap admin's only way in. See CLAUDE.md's Architecture
+    // Patterns → Session auth for the invariant this preserves.
+    let user;
+    try {
+      user = await findUserByEmail(email);
+    } catch (err) {
+      captureException(err);
+      user = null;
+    }
     let loginOk;
     let checkedAgainst;
 
