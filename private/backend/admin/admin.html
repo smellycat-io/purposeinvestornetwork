@@ -422,6 +422,26 @@
         <span>Email address</span>
         <input type="email" id="invite-email" required>
       </label>
+      <!-- Hidden entirely for a Chair session: a Chair-issued invite always
+           becomes role: 'member' onto the Chair's own Roundtable regardless
+           of what's submitted (routes/users.js ignores these fields once
+           the requester is a Chair), so showing controls that don't do
+           anything would be worse than not showing them. -->
+      <label class="field" id="invite-role-field">
+        <span>Role</span>
+        <select id="invite-role">
+          <option value="chair">Chair</option>
+          <option value="member">Member</option>
+        </select>
+      </label>
+      <label class="field" id="invite-roundtable-chair-field">
+        <span>Roundtable</span>
+        <select id="invite-roundtable-id"></select>
+      </label>
+      <div class="field" id="invite-roundtable-member-field">
+        <span>Roundtables (optional)</span>
+        <div id="invite-roundtable-checks" class="checkbox-list"></div>
+      </div>
       <div class="form-actions">
         <button type="submit" class="btn btn-accent">Send Invite</button>
       </div>

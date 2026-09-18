@@ -180,7 +180,7 @@ equally privileged.
 | Investments | `GET /api/investments[/:slug]` | `GET /api/admin/investments[/:id]` (requireAdmin); `POST/PUT/DELETE /api/admin/investments[/:id]` — Admin or Chair, scoped per Role & Permission Model below |
 | Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` (requireAdmin) |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` (requireAdmin) |
-| Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite` — Admin or Chair, scoped per Role & Permission Model below; `PATCH /api/users/me` — any logged-in role |
+| Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite` — Admin or Chair, scoped per Role & Permission Model below; `GET/PATCH /api/users/me` — any logged-in role |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page, requireAdmin) |
 
 ## Role & Permission Model
@@ -261,13 +261,18 @@ the account — even if it's the Member's only Roundtable. A Member can belong t
 Roundtables, and a Chair has no authority over any but their own; full account deletion
 stays an Admin-only action via this same endpoint.
 
-**Self-service profile (`PATCH /api/users/me`, `requireRole('admin', 'chair',
-'member')`).** Any logged-in user edits their own `firstName`/`lastName`/`phone`/
-`address`. `role`/`roundtableId`/`roundtableIds` are silently ignored if present in the
-body — no legitimate self-edit would ever include them, so there's no permission
-boundary worth surfacing an error for (unlike the Chair-on-Member PATCH above, where a
-disallowed field is rejected outright). The target is always `req.session.userId`,
-never a body/param-supplied id, so this endpoint can never edit anyone else's record.
+**Self-service profile (`GET/PATCH /api/users/me`, both `requireRole('admin', 'chair',
+'member')`).** `GET` returns the current session's own user record — role,
+`roundtableId`/`roundtableIds`, and profile fields included, since the admin dashboard
+uses this to adapt its own UI to the logged-in user's role (e.g. hiding invite controls
+a Chair's submission would just have been overridden anyway), not just to have
+permissions enforced server-side. `PATCH` lets any logged-in user edit their own
+`firstName`/`lastName`/`phone`/`address`; `role`/`roundtableId`/`roundtableIds` are
+silently ignored if present in the body — no legitimate self-edit would ever include
+them, so there's no permission boundary worth surfacing an error for (unlike the
+Chair-on-Member PATCH above, where a disallowed field is rejected outright). Both
+always target `req.session.userId`, never a body/param-supplied id, so neither endpoint
+can ever touch anyone else's record.
 
 **Chair content access — Initiatives and Investments (`POST/PUT/DELETE
 /api/admin/initiatives[/:id]`, `POST/PUT/DELETE /api/admin/investments[/:id]`, both
