@@ -107,13 +107,32 @@ stores its SHA-256 hash — a DB read or leak alone can't be replayed as a usabl
 Follow this pattern for any future token-based flow (e.g. chair-issued member invites):
 generate, hash for storage, compare with `crypto.timingSafeEqual`.
 
-### Session auth — currently flat
+### Session auth
 
-`shared/auth.js`'s `requireAdmin` only checks `req.session.loggedIn` — it does not
-distinguish Admin from Chair from Member. Any role-aware route needs its own middleware
-built alongside (not instead of) `requireAdmin`, checking a role/roundtable claim on the
-session or user record. Don't scatter role checks inline in route handlers — centralize
-them in `shared/auth.js` the way `requireAdmin` already is.
+`req.session.loggedIn` marks any authenticated session; `req.session.role` and
+`req.session.roundtableId` (set at login in `routes/auth.js`) carry the Admin/Chair/
+Member distinction on top of it. `shared/auth.js` exposes both `requireAdmin` (flat —
+checks only `loggedIn`, no role distinction) and `requireRole(...roles)` (checks
+`req.session.role` against an allowlist; JSON 401/403 for `/api/*` routes, a redirect
+for page routes). Not every route is migrated to `requireRole` yet — see
+`docs/DATA-MODEL.md`'s API Endpoints table for exactly which ones are. A new role-aware
+route should use `requireRole`, not a bespoke check; don't scatter role logic inline in
+route handlers — centralize it in `shared/auth.js` the way both middlewares already are.
+
+**The bootstrap `ADMIN_USER`/`ADMIN_PASS` login must stay reachable and functional
+independent of the Users table, DynamoDB, or any GSI's health.** It's the
+account-recovery path of last resort — if a Users-table lookup can ever block it,
+there's no way back in when that table or its indexes break. `routes/auth.js`'s login
+handler enforces this by wrapping only the `findUserByEmail` call in its own
+try/catch, falling through to the bootstrap check on failure exactly as if no user
+record existed. **Never make the bootstrap path depend on a successful database call
+first** — that's the specific mistake behind the 2026-09-17 incident: the
+`email-index` GSI wasn't provisioned before the role rollout deployed,
+`findUserByEmail` threw, and the single try/catch then wrapping the whole handler
+treated that as a hard failure — locking out the bootstrap admin along with every real
+account, since a `catch` meant for genuinely unexpected errors had quietly become the
+only thing standing between a routine index outage and the last-resort login. Any
+future change to this handler must preserve the try/catch split.
 
 ### Error handling
 
