@@ -1513,7 +1513,7 @@
     <p>Your responses have been received and will go directly to the PIN founding team. We'll be in touch as the new PIN takes shape.</p>
     <div class="free-month-card" id="free-month-card">
       <p id="free-month-text">🎁 <strong>You&rsquo;ve earned a free month</strong> when membership opens.</p>
-      <a class="btn btn-primary" id="free-month-cta" href="/become-a-member.html">Select Your Tier →</a>
+      <a class="btn btn-primary" id="free-month-cta" href="/become-a-member.html">Join the Waitlist →</a>
     </div>
   </div>
 
@@ -1660,7 +1660,7 @@
         freeMonthCta.textContent = 'View Membership Options →';
       } else {
         freeMonthText.innerHTML = '🎁 <strong>You&rsquo;ve earned a free month</strong> when membership opens.';
-        freeMonthCta.textContent = 'Select Your Tier →';
+        freeMonthCta.textContent = 'Join the Waitlist →';
       }
       if (answers.email) {
         freeMonthCta.href = '/become-a-member.html?email=' + encodeURIComponent(answers.email);
