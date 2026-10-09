@@ -232,12 +232,12 @@ a timer or against the whole repo at once.
   can't exercise. State this plainly in the PR description (e.g. 'Needs a staging pass
   before merging to main: <specific reason>') rather than assuming it's implied by the
   change touching infra-adjacent code.
-- **Every PR description includes a summary of changes and the original prompt.**
-  The summary comes first — what shipped, file by file if that's clearer, plus
-  anything flagged for Elise's decision. Below it, include the prompt/instructions
-  this work was built from, verbatim. A reviewer (including a future Claude Code
-  session) should be able to read the PR and see both what was asked and what was
-  delivered, without digging through chat history to find the original ask.
+- **The chat-facing report (not the PR description) includes a mini summary and the
+  original prompt.** When wrapping up a task in the terminal/chat, give a short
+  summary of what shipped, then quote back the prompt/instructions this work was
+  built from, verbatim. Lets Elise confirm at a glance that the request and the
+  delivery match, without reading the PR itself. This is separate from the PR
+  description, which stays focused on the change for a GitHub reviewer.
 
 ## Comments & Documentation
 
