@@ -197,6 +197,11 @@ a timer or against the whole repo at once.
 - All changes on feature/working branches — no direct commits to `stage` or `main`
 - Manual merge only: feature branch → `stage` (test) → `main` (production). No
   automated or Claude-initiated merges into either branch.
+- **Every PR's base branch is `stage`, never `main`.** `gh pr create` defaults to the
+  repo's default branch — pass `--base stage` explicitly every time, since the default
+  will otherwise be wrong. The one exception is the recurring `stage` → `main`
+  promotion PR itself, which is base `main` / head `stage` by definition — that's the
+  only PR that should ever target `main` directly.
 - `deploy.yml` runs on push to `main` (production); `deploy-stage.yml` on push to
   `stage`
 - **Branch naming**: `feature/short-description` for new functionality
