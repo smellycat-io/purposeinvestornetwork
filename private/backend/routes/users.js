@@ -3,18 +3,22 @@ const { captureMessage } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
 const { requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
-const { sendEmail } = require('../shared/email.js');
+const { sendInviteEmail, sendResetEmail } = require('../shared/email.js');
 const {
   listUsers,
   getUserById,
+  toPublicUser,
   findUserByEmail,
   createInvite,
+  reissueInvite,
   acceptInvite,
   createPasswordReset,
   resetPassword,
   updateUser,
   deleteUser,
 } = require('../db/users.js');
+
+const MAX_NOTE_LENGTH = 500;
 
 const VALID_ROLES = ['admin', 'chair', 'member'];
 
@@ -91,17 +95,72 @@ router.post(
       }
     }
 
+    const note = String((req.body || {}).note || '').trim().slice(0, MAX_NOTE_LENGTH) || null;
+
     const { user, token } = await createInvite(email, { role, roundtableId, roundtableIds });
     const link = `${siteUrl(req)}/accept-invite.html?token=${encodeURIComponent(token)}`;
-    const emailed = await sendEmail(
-      email,
-      'You’ve been invited to the Purpose Investor Network admin dashboard',
-      `You've been invited to join the PIN admin dashboard. Set up your account here:\n\n${link}\n\nThis link expires in 7 days.`
-    );
+    const emailed = await sendInviteEmail(email, link, { note });
 
     captureMessage(`User invited — email: "${email}", id: ${user.id}, emailed: ${emailed}`, 'info');
     res.status(201).json({ success: true, emailed });
   }, 'Unable to send invite.')
+);
+
+// Resend: a pending user's invite token/expiry/inviteSentAt are all
+// replaced (db/users.js's reissueInvite) — the old link in their inbox
+// stops working the moment this runs, not merely becomes one of two valid
+// links. Same Admin/Chair scoping as every other per-user Users action
+// below.
+router.post(
+  '/api/admin/users/:id/resend-invite',
+  requireRole('admin', 'chair'),
+  asyncRoute(async (req, res) => {
+    const target = await getUserById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+
+    if (req.session.role === 'chair') {
+      const chairRoundtableId = req.session.roundtableId;
+      if (target.role !== 'member' || !roundtableArrayContains(target.roundtableIds, chairRoundtableId)) {
+        return res.status(403).json({ error: 'Not authorized to resend this invite.' });
+      }
+    }
+
+    if (target.status !== 'pending') {
+      return res.status(400).json({ error: 'This user has already accepted their invite.' });
+    }
+
+    const result = await reissueInvite(req.params.id);
+    const link = `${siteUrl(req)}/accept-invite.html?token=${encodeURIComponent(result.token)}`;
+    const emailed = await sendInviteEmail(result.user.email, link);
+
+    captureMessage(`Invite resent — email: "${result.user.email}", id: ${result.user.id}, emailed: ${emailed}`, 'info');
+    res.json({ success: true, emailed });
+  }, 'Unable to resend invite.')
+);
+
+// Lets an Admin send a password-reset link on a user's behalf (e.g. a
+// Member who's locked out and can't reach their own forgot-password
+// flow) — reuses the exact same createPasswordReset/1-hour link as the
+// public /api/forgot-password route below, just triggered by an Admin
+// rather than the user themselves. Admin-only, unlike resend: a Chair has
+// no business initiating a password change on a Member's account.
+router.post(
+  '/api/admin/users/:id/send-reset',
+  requireRole('admin'),
+  asyncRoute(async (req, res) => {
+    const target = await getUserById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+    if (target.status !== 'active') {
+      return res.status(400).json({ error: 'This user has not activated their account yet.' });
+    }
+
+    const result = await createPasswordReset(target.email);
+    const link = `${siteUrl(req)}/reset-password.html?token=${encodeURIComponent(result.token)}`;
+    const emailed = await sendResetEmail(target.email, link);
+
+    captureMessage(`Password reset sent by Admin — email: "${target.email}", id: ${target.id}, emailed: ${emailed}`, 'info');
+    res.json({ success: true, emailed });
+  }, 'Unable to send reset email.')
 );
 
 // Admin can change any of updateUser's fields on any user. A Chair may
@@ -154,6 +213,20 @@ router.patch(
       if (Object.prototype.hasOwnProperty.call(updates, 'role') && !VALID_ROLES.includes(updates.role)) {
         return res.status(400).json({ error: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
       }
+
+      // A Chair with no roundtableId is a meaningless state (nothing for
+      // them to chair) — checked against the *resulting* role/roundtableId
+      // (body value if submitted, else the target's existing one), not
+      // just a changed role, so this also catches an Admin nulling out an
+      // existing Chair's roundtableId without changing their role away
+      // from 'chair'.
+      const effectiveRole = Object.prototype.hasOwnProperty.call(updates, 'role') ? updates.role : target.role;
+      const effectiveRoundtableId = Object.prototype.hasOwnProperty.call(updates, 'roundtableId')
+        ? updates.roundtableId
+        : target.roundtableId;
+      if (effectiveRole === 'chair' && !effectiveRoundtableId) {
+        return res.status(400).json({ error: 'A Chair requires a roundtableId.' });
+      }
     }
 
     const updated = await updateUser(req.params.id, updates);
@@ -192,6 +265,32 @@ router.delete(
     captureMessage(`User removed — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to remove user.')
+);
+
+// Self-service: any logged-in user reads their own profile — role and
+// roundtableId/roundtableIds included, since the admin dashboard needs
+// these to adapt its own UI to the logged-in user (e.g. hiding invite
+// controls a Chair's submission would just have overridden anyway), not
+// just to have them enforced server-side. Always targets
+// req.session.userId, same "never anyone else's record" guarantee as the
+// PATCH below.
+router.get(
+  '/api/users/me',
+  requireRole('admin', 'chair', 'member'),
+  asyncRoute(async (req, res) => {
+    if (!req.session.userId) {
+      // The bootstrap ADMIN_USER/ADMIN_PASS login (routes/auth.js) has no
+      // Users-table record at all — the session carries role:'admin' and
+      // no userId. That's a legitimate, expected shape here, not a missing
+      // profile, so this reports it explicitly rather than 404ing (which
+      // would read as "something's wrong with your session" instead of
+      // "there's nothing to fetch").
+      return res.json({ role: req.session.role, bootstrap: true });
+    }
+    const user = await getUserById(req.session.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    res.json(toPublicUser(user));
+  }, 'Unable to load your profile.')
 );
 
 // Self-service: any logged-in user edits their own profile. role/
@@ -263,11 +362,7 @@ router.post(
     const result = await createPasswordReset(email);
     if (result) {
       const link = `${siteUrl(req)}/reset-password.html?token=${encodeURIComponent(result.token)}`;
-      await sendEmail(
-        email,
-        'Reset your Purpose Investor Network admin password',
-        `A password reset was requested for your PIN admin account. Reset it here:\n\n${link}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.`
-      );
+      await sendResetEmail(email, link);
       captureMessage(`Password reset requested — email: "${email}"`, 'info');
     } else {
       captureMessage(`Password reset requested for unknown/inactive email: "${email}"`, 'info');
