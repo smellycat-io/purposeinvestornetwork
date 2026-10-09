@@ -250,7 +250,6 @@ async function updateUser(id, fields) {
 module.exports = {
   listUsers,
   getUserById,
-  toPublicUser,
   findUserByEmail,
   createInvite,
   acceptInvite,
