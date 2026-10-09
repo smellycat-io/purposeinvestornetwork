@@ -187,10 +187,6 @@ a timer or against the whole repo at once.
 - Watch for "one-off" scripts or quick prototypes that quietly become permanent — either
   clean them up to match project standards or remove them, don't let temporary code
   linger alongside the real systems
-- `README.md` and `server.test.js` are currently out of date relative to the DynamoDB/
-  Lambda architecture actually in use (they still describe the original SQLite
-  prototype) — don't treat them as current-state documentation until they're updated
-  (see Docs Sync above)
 
 ## Git Workflow
 
@@ -249,12 +245,9 @@ worth a line explaining *why* a table would opt in or out.
 ## Testing
 
 - **Framework**: Jest + Supertest (already in `devDependencies`)
-- `server.test.js` currently tests against the old SQLite-backed `index.js` path and is
-  stale relative to the DynamoDB-only backend — needs updating to reflect current routes
-  before it's trustworthy as a regression check
 - Prioritize testing anything with conditional branching that's easy to get subtly
   wrong: `access.js` gating logic, token hashing/expiry in `users.js`, slug generation
-  in `repository.js`, and (once built) role/roundtable-scoping logic for Chairs
+  in `repository.js`, and role/roundtable-scoping logic for Chairs
 - Tests should fail loudly and specifically — assert the actual expected value (the
   exact role, the exact filtered list), not just "no exception thrown" — so a broken
   test tells you what's wrong, not just that something is
