@@ -171,17 +171,20 @@ each after a real incident:
 - **`ADMIN_USER`** is the literal string `admin` on production. Once set to a real
   email, it silently shadowed `ADMIN_PASS` as the login check for that address — a
   lockout. It must never be set to an address that could match a real Users-table
-  account. Staging differs: `ADMIN_USER_STAGE`, if set, overrides the `admin` fallback
-  (see `private/infra/STAGE-SETUP.md`) — the same anti-email validation applies to
-  whichever one actually supplies the value.
+  account, and the deploy script enforces that. Staging differs: `ADMIN_USER_STAGE`,
+  if set, overrides the `admin` fallback (see `private/infra/STAGE-SETUP.md`) — and
+  stage's deploy script deliberately does **not** reject an email there, accepting
+  the same residual risk on the lower-stakes staging environment that production's
+  check exists to avoid. An explicit choice, not an inconsistency.
 - **`SENTRY_DSN`** is hardcoded directly. A DSN is write-only/ingest-only (worst-case
   exposure is spam events, not data access), and its value repeatedly got corrupted
   through the GitHub Secrets web UI (once literally became the string `"SENTRY_DSN"`).
   Get the current value from Sentry project settings if it ever needs to change.
 
-The deploy script validates both before applying — a regex check on `SENTRY_DSN`'s
-shape and a check that `ADMIN_USER` is non-empty and contains no `@` — and fails the
-deploy loudly rather than silently shipping a value that looks like either past mistake.
+Both deploy scripts validate `SENTRY_DSN`'s shape and that `ADMIN_USER` is non-empty,
+failing loudly rather than silently shipping a value that looks like the `SENTRY_DSN`
+past mistake. Only production's script additionally rejects an `ADMIN_USER` containing
+`@` — stage's does not (see above).
 
 Full current env var list (production Lambda): `ADMIN_USER`, `ADMIN_PASS`,
 `SESSION_SECRET`, `SENTRY_DSN`, `SENTRY_BROWSER_DSN`, `SENTRY_ENVIRONMENT`,
