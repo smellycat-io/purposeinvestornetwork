@@ -50,7 +50,7 @@ Add these under repo Settings → Secrets and variables → Actions:
 | `AWS_S3_BUCKET_STAGE` | `purposeinvestornetwork-stage` |
 | `AWS_BACKEND_BUCKET_STAGE` | `purposeinvestornetwork-private-stage` |
 | `STAGE_CLOUDFRONT_DISTRIBUTION_ID` | `E11ZV5H45NVWDX` |
-| `ADMIN_USER_STAGE` | optional — a non-email bootstrap username for the `/admin` dashboard login on stage; falls back to the literal `admin` if unset. Must not contain `@` (same anti-email-shadowing rule as prod's `ADMIN_USER`, see `docs/ARCHITECTURE.md`'s Env vars & secrets section) — the deploy fails loudly if it does. This is the **app's own login form**, a separate credential from the CloudFront Basic Auth popup that gates all of stage (see "Rotating the Basic Auth credential" below) — don't conflate the two. |
+| `ADMIN_USER_STAGE` | optional — a bootstrap username for the `/admin` dashboard login on stage; falls back to the literal `admin` if unset. Any format is accepted, email included — unlike prod's `ADMIN_USER` (see `docs/ARCHITECTURE.md`'s Env vars & secrets section), stage doesn't reject an email here; that's a deliberate, accepted tradeoff for the lower-stakes stage environment, not an oversight. This is the **app's own login form**, a separate credential from the CloudFront Basic Auth popup that gates all of stage (see "Rotating the Basic Auth credential" below) — don't conflate the two. |
 | `ADMIN_PASS_STAGE` | a strong password, distinct from prod's `ADMIN_PASS` |
 | `SESSION_SECRET_STAGE` | a long random string (e.g. `openssl rand -hex 32`), distinct from prod's `SESSION_SECRET` |
 
