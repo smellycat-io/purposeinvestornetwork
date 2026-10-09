@@ -50,16 +50,17 @@ router.get(
       return res.json(all.filter((u) => u.role === 'member' && roundtableArrayContains(u.roundtableIds, chairRoundtableId)));
     }
     res.json(all);
-  }, 'Unable to load users.')
+  }, 'Unable to load users.', { verbose: true })
 );
 
-// Admin can invite a Chair (any roundtableId) or a Member (any
-// roundtableIds, including none) — not another Admin; there's no Stage 1
-// path for that yet (see docs/DATA-MODEL.md, which specifies this same
-// boundary). A Chair can only invite a Member, and only onto their own
-// Roundtable — the request body's role/roundtableId/roundtableIds are
-// ignored rather than trusted once the requester is a Chair, since this is
-// a permission boundary, not a client-side convenience.
+// Admin can invite another Admin (full access, no roundtableId/
+// roundtableIds — createInvite forces both null/[] for any role but
+// chair/member), a Chair (any roundtableId), or a Member (any
+// roundtableIds, including none). A Chair can only invite a Member, and
+// only onto their own Roundtable — the request body's
+// role/roundtableId/roundtableIds are ignored rather than trusted once the
+// requester is a Chair, since this is a permission boundary, not a
+// client-side convenience.
 router.post(
   '/api/admin/users/invite',
   requireRole('admin', 'chair'),
@@ -82,15 +83,15 @@ router.post(
       roundtableIds = [req.session.roundtableId];
     } else {
       role = String((req.body || {}).role || '').trim();
-      if (!['chair', 'member'].includes(role)) {
-        return res.status(400).json({ error: 'Role must be "chair" or "member".' });
+      if (!VALID_ROLES.includes(role)) {
+        return res.status(400).json({ error: `Role must be one of: ${VALID_ROLES.join(', ')}.` });
       }
       if (role === 'chair') {
         roundtableId = (req.body || {}).roundtableId || null;
         if (!roundtableId) {
           return res.status(400).json({ error: 'A Chair invite requires a roundtableId.' });
         }
-      } else {
+      } else if (role === 'member') {
         roundtableIds = Array.isArray((req.body || {}).roundtableIds) ? req.body.roundtableIds : [];
       }
     }
@@ -103,7 +104,7 @@ router.post(
 
     captureMessage(`User invited — email: "${email}", id: ${user.id}, emailed: ${emailed}`, 'info');
     res.status(201).json({ success: true, emailed });
-  }, 'Unable to send invite.')
+  }, 'Unable to send invite.', { verbose: true })
 );
 
 // Resend: a pending user's invite token/expiry/inviteSentAt are all
@@ -135,7 +136,7 @@ router.post(
 
     captureMessage(`Invite resent — email: "${result.user.email}", id: ${result.user.id}, emailed: ${emailed}`, 'info');
     res.json({ success: true, emailed });
-  }, 'Unable to resend invite.')
+  }, 'Unable to resend invite.', { verbose: true })
 );
 
 // Lets an Admin send a password-reset link on a user's behalf (e.g. a
@@ -160,7 +161,7 @@ router.post(
 
     captureMessage(`Password reset sent by Admin — email: "${target.email}", id: ${target.id}, emailed: ${emailed}`, 'info');
     res.json({ success: true, emailed });
-  }, 'Unable to send reset email.')
+  }, 'Unable to send reset email.', { verbose: true })
 );
 
 // Admin can change any of updateUser's fields on any user. A Chair may
@@ -232,7 +233,7 @@ router.patch(
     const updated = await updateUser(req.params.id, updates);
     captureMessage(`User updated — id: ${req.params.id}, by role: ${req.session.role}`, 'info');
     res.json({ success: true, user: updated });
-  }, 'Unable to update user.')
+  }, 'Unable to update user.', { verbose: true })
 );
 
 // A Chair "removing" a Member means removing them from the Chair's own
@@ -264,7 +265,7 @@ router.delete(
     await deleteUser(req.params.id);
     captureMessage(`User removed — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to remove user.')
+  }, 'Unable to remove user.', { verbose: true })
 );
 
 // Self-service: any logged-in user reads their own profile — role and
@@ -290,7 +291,7 @@ router.get(
     const user = await getUserById(req.session.userId);
     if (!user) return res.status(404).json({ error: 'User not found.' });
     res.json(toPublicUser(user));
-  }, 'Unable to load your profile.')
+  }, 'Unable to load your profile.', { verbose: true })
 );
 
 // Self-service: any logged-in user edits their own profile. role/
@@ -318,7 +319,7 @@ router.patch(
     const updated = await updateUser(req.session.userId, updates);
     if (!updated) return res.status(404).json({ error: 'User not found.' });
     res.json({ success: true, user: updated });
-  }, 'Unable to update your profile.')
+  }, 'Unable to update your profile.', { verbose: true })
 );
 
 // --- Public: accept an invite ---

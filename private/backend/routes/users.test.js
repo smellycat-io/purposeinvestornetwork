@@ -591,3 +591,60 @@ describe('POST /api/admin/users/invite — note', () => {
     expect(bodyText).not.toContain('x'.repeat(501));
   });
 });
+
+describe('verbose error detail', () => {
+  test('an unexpected failure on an authenticated route includes detail in the response', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+    // Force the one call PutCommand would otherwise make for a fresh
+    // invite to reject, simulating the exact "Apply environment
+    // variables"-adjacent class of failure asyncRoute's generic message
+    // alone gives no visibility into.
+    ddbMock.on(PutCommand).rejectsOnce(new Error('ValidationException: the table does not have the specified index'));
+
+    const res = await agent.post('/api/admin/users/invite').send({
+      email: 'will-fail@example.com',
+      role: 'member',
+      roundtableIds: [],
+    });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({
+      error: 'Unable to send invite.',
+      detail: 'ValidationException: the table does not have the specified index',
+    });
+  });
+});
+
+describe('POST /api/admin/users/invite — role: admin', () => {
+  test('an Admin can invite another Admin — no roundtableId or roundtableIds', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.post('/api/admin/users/invite').send({
+      email: 'new-admin@example.com',
+      role: 'admin',
+    });
+
+    expect(res.status).toBe(201);
+    const stored = usersTable.find((u) => u.email === 'new-admin@example.com');
+    expect(stored.role).toBe('admin');
+    expect(stored.roundtableId).toBeNull();
+    expect(stored.roundtableIds).toEqual([]);
+  });
+
+  test("a Chair's role: admin in the body is ignored — still invited as a Member on the Chair's own Roundtable", async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('chair-a@example.com');
+
+    const res = await agent.post('/api/admin/users/invite').send({
+      email: 'sneaky@example.com',
+      role: 'admin',
+    });
+
+    expect(res.status).toBe(201);
+    const stored = usersTable.find((u) => u.email === 'sneaky@example.com');
+    expect(stored.role).toBe('member');
+    expect(stored.roundtableIds).toEqual(['rt-A']);
+  });
+});
