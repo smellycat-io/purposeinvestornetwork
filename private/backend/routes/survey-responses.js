@@ -80,7 +80,7 @@ router.post('/api/survey', asyncRoute(async (req, res) => {
 
   // Free-month tracking: if this email already has a waitlist signup, credit
   // it now. If not, `alreadyOnWaitlist` comes back false so the front-end
-  // knows to prompt them to go select a tier (they took the survey first).
+  // knows to prompt them to go join the waitlist (they took the survey first).
   const alreadyOnWaitlist = email ? linkSurveyToWaitlistSubscriber(email, recordId) : false;
 
   captureMessage(

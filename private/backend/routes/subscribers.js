@@ -10,7 +10,6 @@ const router = Router();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const VALID_SOURCES = ['newsletter', 'membership-waitlist'];
-const VALID_TIERS = ['Curious', 'Learning', 'Investor', 'Vetted Investor'];
 
 router.post('/api/subscribe', asyncRoute(async (req, res) => {
   const body = req.body || {};
@@ -23,12 +22,11 @@ router.post('/api/subscribe', asyncRoute(async (req, res) => {
     name: String(body.name || '').trim().slice(0, 200) || null,
     phone: String(body.phone || '').trim().slice(0, 40) || null,
     address: String(body.address || '').trim().slice(0, 300) || null,
-    tier: VALID_TIERS.includes(body.tier) ? body.tier : null,
   };
 
   saveSubscriberToStore(new Date().toISOString(), email, source, details);
 
-  captureMessage(`Subscriber saved — email: "${email}", source: ${source}, tier: ${details.tier || '(none)'}`, 'info');
+  captureMessage(`Subscriber saved — email: "${email}", source: ${source}`, 'info');
 
   if (source === 'membership-waitlist') {
     await sendNotification(
@@ -38,7 +36,6 @@ router.post('/api/subscribe', asyncRoute(async (req, res) => {
         `Name: ${details.name || '(not provided)'}`,
         `Phone: ${details.phone || '(not provided)'}`,
         `Address: ${details.address || '(not provided)'}`,
-        `Interested tier: ${details.tier || '(not selected)'}`,
       ].join('\n')
     );
   }

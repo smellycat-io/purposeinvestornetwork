@@ -99,7 +99,6 @@ function saveSubscriberToStore(createdAt, email, source, details) {
     name: extra.name || null,
     phone: extra.phone || null,
     address: extra.address || null,
-    tier: extra.tier || null,
     surveyResponseId: existingSurveyId,
     freeMonthEarned: !!existingSurveyId,
   });
