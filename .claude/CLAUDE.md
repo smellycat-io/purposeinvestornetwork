@@ -247,6 +247,13 @@ a timer or against the whole repo at once.
   can't exercise. State this plainly in the PR description (e.g. 'Needs a staging pass
   before merging to main: <specific reason>') rather than assuming it's implied by the
   change touching infra-adjacent code.
+- **The chat-facing report adds a mini summary and the original prompt — it doesn't
+  replace the PR's own full summary.** When wrapping up a task in the terminal/chat,
+  give a short summary of what shipped, then quote back the prompt/instructions this
+  work was built from, verbatim. Lets Elise confirm at a glance that the request and
+  the delivery match, without opening the PR. The PR description still gets its full
+  summary as already required above — this chat-facing mini summary is an addition
+  for quick confirmation, not a shorter replacement for it.
 
 ## Comments & Documentation
 
