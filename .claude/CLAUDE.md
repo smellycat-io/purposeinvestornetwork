@@ -232,6 +232,12 @@ a timer or against the whole repo at once.
   can't exercise. State this plainly in the PR description (e.g. 'Needs a staging pass
   before merging to main: <specific reason>') rather than assuming it's implied by the
   change touching infra-adjacent code.
+- **Every PR description includes a summary of changes and the original prompt.**
+  The summary comes first — what shipped, file by file if that's clearer, plus
+  anything flagged for Elise's decision. Below it, include the prompt/instructions
+  this work was built from, verbatim. A reviewer (including a future Claude Code
+  session) should be able to read the PR and see both what was asked and what was
+  delivered, without digging through chat history to find the original ask.
 
 ## Comments & Documentation
 
