@@ -8,6 +8,7 @@
     press: [],
     investments: [],
     events: [],
+    me: null,
   };
 
   const POST_TYPES_WITH_MEMBER_ONLY = ['education'];
@@ -52,6 +53,22 @@
     }
     if (response.status === 204) return null;
     return response.json();
+  }
+
+  // Fetched once (and cached as a promise, not just state.me) so the
+  // dashboard can adapt its own UI to the logged-in user's role — e.g.
+  // hiding invite controls a Chair's submission would just have been
+  // overridden anyway — not just enforce permissions server-side. Callers
+  // that need state.me before the initial page-load fetch resolves await
+  // this same in-flight request instead of firing a second one.
+  let currentUserPromise = null;
+  function loadCurrentUser() {
+    if (!currentUserPromise) {
+      currentUserPromise = api('/api/users/me')
+        .then((me) => { state.me = me; return me; })
+        .catch((err) => { showToast('Unable to load your profile: ' + err.message, true); return null; });
+    }
+    return currentUserPromise;
   }
 
   // --- Generic CRUD panel ---
@@ -826,10 +843,45 @@
   // Not a createCrudPanel: invite-by-email (no title/body form), no edit
   // flow, and a table layout rather than .list-item rows.
 
+  // A Chair-issued invite always becomes role: 'member' onto the Chair's
+  // own Roundtable regardless of what's submitted (routes/users.js ignores
+  // role/roundtableId/roundtableIds entirely once the requester is a
+  // Chair), so a Chair session hides the role select and both roundtable
+  // fields outright. An Admin session shows the role select and swaps
+  // between the Chair (single roundtable) and Member (multi roundtable,
+  // optional) fields based on the currently selected role.
+  function updateInviteFieldVisibility() {
+    const isChair = !!(state.me && state.me.role === 'chair');
+    document.getElementById('invite-role-field').style.display = isChair ? 'none' : 'flex';
+    if (isChair) {
+      document.getElementById('invite-roundtable-chair-field').style.display = 'none';
+      document.getElementById('invite-roundtable-member-field').style.display = 'none';
+      return;
+    }
+    const role = document.getElementById('invite-role').value;
+    document.getElementById('invite-roundtable-chair-field').style.display = role === 'chair' ? 'flex' : 'none';
+    document.getElementById('invite-roundtable-member-field').style.display = role === 'member' ? 'block' : 'none';
+  }
+
+  function populateInviteRoundtableFields() {
+    const select = document.getElementById('invite-roundtable-id');
+    select.innerHTML = state.roundtables.length
+      ? state.roundtables.map((rt) => `<option value="${escapeHtml(rt.id)}">${escapeHtml(rt.name)}</option>`).join('')
+      : '<option value="">No roundtables yet — create one first.</option>';
+    renderRoundtableChecks('invite-roundtable-checks', []);
+  }
+
   async function loadUsersTab() {
     const tbody = document.getElementById('users-rows');
     try {
-      const users = await api('/api/admin/users');
+      await loadCurrentUser();
+      const [users, roundtables] = await Promise.all([
+        api('/api/admin/users'),
+        state.roundtables.length ? Promise.resolve(state.roundtables) : api('/api/roundtables'),
+      ]);
+      state.roundtables = roundtables;
+      populateInviteRoundtableFields();
+      updateInviteFieldVisibility();
       if (!users.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="muted">No users yet.</td></tr>';
         return;
@@ -856,10 +908,26 @@
   async function sendInvite(event) {
     event.preventDefault();
     const email = document.getElementById('invite-email').value.trim();
+    const payload = { email };
+    // A Chair-issued invite ignores role/roundtableId/roundtableIds
+    // server-side regardless of what's submitted (see routes/users.js) —
+    // those controls are hidden for a Chair session
+    // (updateInviteFieldVisibility), so there's nothing meaningful to read
+    // from them here either.
+    if (!(state.me && state.me.role === 'chair')) {
+      const role = document.getElementById('invite-role').value;
+      payload.role = role;
+      if (role === 'chair') {
+        payload.roundtableId = document.getElementById('invite-roundtable-id').value || null;
+      } else {
+        payload.roundtableIds = Array.from(document.querySelectorAll('#invite-roundtable-checks input:checked')).map((el) => el.value);
+      }
+    }
     try {
-      const result = await api('/api/admin/users/invite', { method: 'POST', body: JSON.stringify({ email }) });
+      const result = await api('/api/admin/users/invite', { method: 'POST', body: JSON.stringify(payload) });
       showToast(result.emailed ? 'Invite sent.' : 'Invite created, but the email failed to send.', !result.emailed);
       document.getElementById('invite-form').reset();
+      updateInviteFieldVisibility();
       await loadUsersTab();
     } catch (err) {
       showToast(err.message, true);
@@ -879,6 +947,7 @@
 
   function initUsersTab() {
     document.getElementById('invite-form').addEventListener('submit', sendInvite);
+    document.getElementById('invite-role').addEventListener('change', updateInviteFieldVisibility);
     document.getElementById('users-rows').addEventListener('click', (event) => {
       const btn = event.target.closest('[data-action="delete-user"]');
       if (!btn) return;
@@ -894,6 +963,7 @@
     initInvestmentsEventsTab();
     initSettingsTab();
     initUsersTab();
+    loadCurrentUser();
     loadSurvey();
   });
 })();

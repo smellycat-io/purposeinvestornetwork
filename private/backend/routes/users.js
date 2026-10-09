@@ -7,6 +7,7 @@ const { sendEmail } = require('../shared/email.js');
 const {
   listUsers,
   getUserById,
+  toPublicUser,
   findUserByEmail,
   createInvite,
   acceptInvite,
@@ -192,6 +193,28 @@ router.delete(
     captureMessage(`User removed — id: ${req.params.id}`, 'info');
     res.status(204).end();
   }, 'Unable to remove user.')
+);
+
+// Self-service: any logged-in user reads their own profile — role and
+// roundtableId/roundtableIds included, since the admin dashboard needs
+// these to adapt its own UI to the logged-in user (e.g. hiding invite
+// controls a Chair's submission would just have overridden anyway), not
+// just to have them enforced server-side. Always targets
+// req.session.userId, same "never anyone else's record" guarantee as the
+// PATCH below. Goes through toPublicUser like every other Users read, so
+// passwordHash/token fields can never leak here even if someone adds a
+// field to the raw item later.
+router.get(
+  '/api/users/me',
+  requireRole('admin', 'chair', 'member'),
+  asyncRoute(async (req, res) => {
+    if (!req.session.userId) {
+      return res.status(404).json({ error: 'No profile for this session.' });
+    }
+    const user = await getUserById(req.session.userId);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    res.json(toPublicUser(user));
+  }, 'Unable to load your profile.')
 );
 
 // Self-service: any logged-in user edits their own profile. role/
