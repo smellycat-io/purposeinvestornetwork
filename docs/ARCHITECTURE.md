@@ -168,9 +168,12 @@ No `.env` file is committed. Two layers manage configuration:
 Two variables are deliberately hardcoded in the workflow YAML instead of GitHub secrets,
 each after a real incident:
 
-- **`ADMIN_USER`** is the literal string `admin`. Once set to a real email, it silently
-  shadowed `ADMIN_PASS` as the login check for that address — a lockout. It must never
-  be set to an address that could match a real Users-table account.
+- **`ADMIN_USER`** is the literal string `admin` on production. Once set to a real
+  email, it silently shadowed `ADMIN_PASS` as the login check for that address — a
+  lockout. It must never be set to an address that could match a real Users-table
+  account. Staging differs: `ADMIN_USER_STAGE`, if set, overrides the `admin` fallback
+  (see `private/infra/STAGE-SETUP.md`) — the same anti-email validation applies to
+  whichever one actually supplies the value.
 - **`SENTRY_DSN`** is hardcoded directly. A DSN is write-only/ingest-only (worst-case
   exposure is spam events, not data access), and its value repeatedly got corrupted
   through the GitHub Secrets web UI (once literally became the string `"SENTRY_DSN"`).

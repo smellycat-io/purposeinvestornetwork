@@ -92,10 +92,14 @@ jobs:
 
       - name: Apply environment variables to stage Lambda
         env:
-          # Hardcoded, not a secret — see deploy.yml for why (bootstrap
-          # fallback identity, not a credential; must never match a real
-          # Users-table email or it silently makes ADMIN_PASS unreachable).
-          ADMIN_USER: admin
+          # ADMIN_USER_STAGE wins if set; falls back to the literal "admin"
+          # otherwise — same bootstrap identity prod hardcodes (see
+          # deploy.yml) when stage has no override of its own. Either way,
+          # the validation below still rejects an email here: once this
+          # matches a real Users-table address, it silently shadows
+          # ADMIN_PASS as that account's login check — a lockout, the same
+          # incident prod's hardcode exists to prevent.
+          ADMIN_USER: ${{ secrets.ADMIN_USER_STAGE || 'admin' }}
           ADMIN_PASS: ${{ secrets.ADMIN_PASS_STAGE }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET_STAGE }}
           # Hardcoded, not a secret — see deploy.yml for why (a Sentry DSN
