@@ -262,6 +262,14 @@ jobs:
               'purpose-investor-network-users-stage',
           ]
           table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
+          # DynamoDB treats a table's GSIs as resources distinct from the
+          # table itself for IAM purposes — a Query against one (e.g.
+          # db/users.js's email-index, queried on every login and invite)
+          # is denied unless the index's own ARN is granted, even though
+          # the table ARN above already grants Query on the table itself.
+          # /index/* covers any index on any of these tables, present or
+          # future, rather than hardcoding just today's one GSI.
+          index_arns = [f'{arn}/index/*' for arn in table_arns]
 
           policy_document = {
               'Version': '2012-10-17',
@@ -274,7 +282,7 @@ jobs:
                       'dynamodb:Scan',
                       'dynamodb:Query',
                   ],
-                  'Resource': table_arns,
+                  'Resource': table_arns + index_arns,
               }],
           }
 
