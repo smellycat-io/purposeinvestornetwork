@@ -77,7 +77,11 @@ reporting are genuinely tested against real infrastructure, not stubbed.
 7. **Reconcile IAM policies** — DynamoDB (scan/query/get/put/delete on every content
    table) and SES (`SendEmail`/`SendRawEmail`) inline policies are (re-)applied via
    `put-role-policy` on *every* deploy, idempotently. This is the actual source of truth
-   for the Lambda's permissions — not any CloudFormation template (see below).
+   for the Lambda's permissions — not any CloudFormation template (see below). The
+   DynamoDB policy's `Resource` list includes each table's ARN *and* a `/index/*`
+   wildcard on it — a Query against a table's GSI (e.g. `db/users.js`'s `email-index`,
+   queried on every login and invite) is a distinct resource from the table itself for
+   IAM purposes and is denied without the index ARN, even with the table ARN granted.
 8. Poll `get-function` until `Configuration.State` is `Active`, then
    `update-function-code` — handles the eventual-consistency window right after Lambda
    creation.
@@ -217,3 +221,12 @@ one `AWS_<THING>_TABLE` per table (see `docs/DATA-MODEL.md`), `SITE_URL`,
 - Whether the CloudFront distribution's *live* behavior configuration actually matches
   `cloudfront-static-routing.js` as checked into the repo — function code and the live
   distribution's attached-function config can drift if one is updated without the other.
+- **`purpose-investor-network-backend-role` (production) has the AWS-managed
+  `AdministratorAccess` policy attached**, alongside the narrower inline policies this
+  file documents above — found while diagnosing a DynamoDB GSI permission gap:
+  production's login/invite flow kept working despite the same gap stage had, purely
+  because `AdministratorAccess` covers it regardless of what the inline policy grants.
+  The Lambda's actual production permissions are broader than the inline policies
+  alone would suggest; whether to tighten this (remove `AdministratorAccess` now that
+  the inline policy covers what's actually needed) is an open decision, not something
+  to change without confirming nothing else currently depends on the broader grant.
