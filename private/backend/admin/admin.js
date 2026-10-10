@@ -49,6 +49,11 @@
       try {
         const body = await response.json();
         if (body && body.error) message = body.error;
+        // Only present on routes that opt into it server-side
+        // (asyncRoute's `verbose` option) — the raw exception message
+        // behind an unexpected 500, folded into the toast so "unable to
+        // X" isn't the whole story.
+        if (body && body.detail) message += ': ' + body.detail;
       } catch (_) { /* ignore */ }
       throw new Error(message);
     }
@@ -987,9 +992,13 @@
       payload.role = level;
       if (level === 'chair') {
         payload.roundtableId = document.getElementById('invite-roundtable-id').value || null;
-      } else {
+      } else if (level === 'member') {
         payload.roundtableIds = Array.from(document.querySelectorAll('#invite-roundtable-checks input:checked')).map((el) => el.value);
       }
+      // level === 'admin': no roundtable field applies — routes/users.js
+      // forces roundtableId/roundtableIds to null/[] for any role but
+      // chair/member regardless, but there's nothing meaningful to read
+      // from the (hidden) roundtable controls here either way.
     }
 
     try {

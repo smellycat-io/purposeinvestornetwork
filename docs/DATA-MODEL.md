@@ -194,7 +194,8 @@ equally privileged.
 
 Three roles share the Users table (see the Users table above for exact field shapes and
 defaulting rules):
-- **Admin** — full access to everything and everyone; can invite a Chair or a Member.
+- **Admin** — full access to everything and everyone; can invite another Admin, a
+  Chair, or a Member.
 - **Chair** — assigned to exactly one Roundtable (`roundtableId`); manages Members
   under that Roundtable (view, invite, edit that Member's membership in their own
   Roundtable, remove from their own Roundtable) and has write access to that
@@ -233,11 +234,12 @@ Endpoints above):
   them.
 
 **Invites (`POST /api/admin/users/invite`, `requireRole('admin', 'chair')`).** An Admin
-can invite a Chair (any `roundtableId`) or a Member (any `roundtableIds`, including
-none) — not another Admin; there's no path for that. A Chair can only invite a Member,
-and only onto their own Roundtable: the request body's `role`/`roundtableId`/
-`roundtableIds` are ignored once the requester is a Chair, rather than trusted, since
-this is a permission boundary rather than a client-side convenience. `createInvite`
+can invite another Admin (no `roundtableId`/`roundtableIds`), a Chair (any
+`roundtableId`), or a Member (any `roundtableIds`, including none). A Chair can only
+invite a Member, and only onto their own Roundtable: the request body's
+`role`/`roundtableId`/`roundtableIds` are ignored once the requester is a Chair, rather
+than trusted, since this is a permission boundary rather than a client-side
+convenience. `createInvite`
 (`db/users.js`) re-derives `roundtableId`/`roundtableIds` from `role` regardless of
 what a caller passes, so a Chair's `roundtableId` is always `null` and a Member's
 `roundtableIds` is always `[]` for any role but `member`, even if a future caller

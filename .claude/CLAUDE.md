@@ -139,7 +139,12 @@ future change to this handler must preserve the try/catch split.
 `shared/asyncRoute.js` wraps route handlers so every route doesn't repeat try/catch →
 `captureException` → 500 JSON boilerplate. Handlers still return their own status codes
 for expected failures (400s, 404s). **Every new route goes through `asyncRoute`, not a
-bare async handler.**
+bare async handler.** Pass `{ verbose: true }` as the third argument to fold the raw
+`error.message` into the 500 response as `detail`, on top of the Sentry report every
+route already gets — but only for a route reachable after authenticating (behind
+`requireAdmin`/`requireRole`). Never pass it on a public route (accept-invite,
+forgot/reset-password, subscribe, survey): an unauthenticated caller could otherwise
+use a 500's detail to probe internals a generic message deliberately hides.
 
 ## Docs Sync
 
