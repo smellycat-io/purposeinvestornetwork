@@ -144,8 +144,15 @@ aren't a queryable key, and invite/reset volume stays low regardless of Member c
 | `passwordHash` | string | set on invite acceptance |
 | `status` | `pending` \| `active` | |
 | `inviteTokenHash` / `inviteTokenExpiresAt` | string \| null | cleared on acceptance |
+| `inviteSentAt` | ISO string \| null | set on invite creation; updated on resend (`reissueInvite`) |
 | `resetTokenHash` / `resetTokenExpiresAt` | string \| null | |
 | `createdAt` / `updatedAt` | ISO string | |
+
+The public shape returned to API callers (`toPublicUser`, in `db/users.js`) is never the
+raw item above — `passwordHash` and every token hash are stripped by construction, and
+two fields are renamed for clarity: `inviteTokenExpiresAt` becomes `inviteExpiresAt`,
+and `inviteSentAt` passes through unchanged. Neither is secret; the admin dashboard uses
+them to show invite status (Pending vs. Expired) and when an invite was last sent.
 
 ### Sessions
 `AWS_SESSIONS_TABLE` — `express-session` store backed by DynamoDB (`db/sessions.js`),
@@ -180,14 +187,15 @@ equally privileged.
 | Investments | `GET /api/investments[/:slug]` | `GET /api/admin/investments[/:id]` (requireAdmin); `POST/PUT/DELETE /api/admin/investments[/:id]` — Admin or Chair, scoped per Role & Permission Model below |
 | Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` (requireAdmin) |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` (requireAdmin) |
-| Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite` — Admin or Chair, scoped per Role & Permission Model below; `PATCH /api/users/me` — any logged-in role |
+| Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite`, `POST /api/admin/users/:id/resend-invite` — Admin or Chair, scoped per Role & Permission Model below; `POST /api/admin/users/:id/send-reset` — Admin only; `GET/PATCH /api/users/me` — any logged-in role |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page, requireAdmin) |
 
 ## Role & Permission Model
 
 Three roles share the Users table (see the Users table above for exact field shapes and
 defaulting rules):
-- **Admin** — full access to everything and everyone; can invite a Chair or a Member.
+- **Admin** — full access to everything and everyone; can invite another Admin, a
+  Chair, or a Member.
 - **Chair** — assigned to exactly one Roundtable (`roundtableId`); manages Members
   under that Roundtable (view, invite, edit that Member's membership in their own
   Roundtable, remove from their own Roundtable) and has write access to that
@@ -226,15 +234,27 @@ Endpoints above):
   them.
 
 **Invites (`POST /api/admin/users/invite`, `requireRole('admin', 'chair')`).** An Admin
-can invite a Chair (any `roundtableId`) or a Member (any `roundtableIds`, including
-none) — not another Admin; there's no path for that. A Chair can only invite a Member,
-and only onto their own Roundtable: the request body's `role`/`roundtableId`/
-`roundtableIds` are ignored once the requester is a Chair, rather than trusted, since
-this is a permission boundary rather than a client-side convenience. `createInvite`
+can invite another Admin (no `roundtableId`/`roundtableIds`), a Chair (any
+`roundtableId`), or a Member (any `roundtableIds`, including none). A Chair can only
+invite a Member, and only onto their own Roundtable: the request body's
+`role`/`roundtableId`/`roundtableIds` are ignored once the requester is a Chair, rather
+than trusted, since this is a permission boundary rather than a client-side
+convenience. `createInvite`
 (`db/users.js`) re-derives `roundtableId`/`roundtableIds` from `role` regardless of
 what a caller passes, so a Chair's `roundtableId` is always `null` and a Member's
 `roundtableIds` is always `[]` for any role but `member`, even if a future caller
-forgets to enforce that itself.
+forgets to enforce that itself. The request body may also include a `note` (trimmed,
+capped at 500 characters) — it's included in the invite email body via
+`sendInviteEmail` (`shared/email.js`) and never persisted anywhere.
+
+**Resending an invite (`POST /api/admin/users/:id/resend-invite`, `requireRole('admin',
+'chair')`).** Pending users only (400 for an already-active target, 404 for an unknown
+one); same Admin/Chair scoping as every other per-user Users action — a Chair may only
+resend a pending Member's invite under their own Roundtable (`roundtableArrayContains`),
+403 otherwise. `reissueInvite` (`db/users.js`) replaces the stored token hash, expiry,
+and `inviteSentAt` outright, so the previous invite link stops working the moment this
+runs — it isn't superseded by a second valid link, it's the only valid link from then
+on.
 
 **Listing Users (`GET /api/admin/users`, `requireRole('admin', 'chair')`).** Admin sees
 every user. A Chair sees only `role: 'member'` users whose `roundtableIds` contains the
@@ -246,7 +266,12 @@ handler, not `listUsers()`, keeping `db/users.js` role-agnostic — the same spl
 Admin can change any of `updateUser`'s fields (`firstName`, `lastName`, `phone`,
 `address`, `role`, `roundtableId`, `roundtableIds`) on any user; changing `role`
 re-derives `roundtableId`/`roundtableIds` the same way `createInvite` does, so an edit
-can't leave a stale `roundtableId` on a user who's no longer a Chair. A Chair may act
+can't leave a stale `roundtableId` on a user who's no longer a Chair. The route itself
+additionally rejects (400) any result that would leave `role: 'chair'` with no
+`roundtableId` — a Chair with no Roundtable is a meaningless state — checked against
+the *effective* role/roundtableId (the submitted value if present, else the target's
+existing one), so this also catches an Admin nulling an existing Chair's `roundtableId`
+without changing their role away from `'chair'` in the same request. A Chair may act
 only on a Member under their own Roundtable (403 otherwise, via
 `roundtableArrayContains`) and may submit only `roundtableIds` in the body — any other
 key, or a `roundtableIds` change that adds or removes a Roundtable other than the
@@ -261,13 +286,31 @@ the account — even if it's the Member's only Roundtable. A Member can belong t
 Roundtables, and a Chair has no authority over any but their own; full account deletion
 stays an Admin-only action via this same endpoint.
 
-**Self-service profile (`PATCH /api/users/me`, `requireRole('admin', 'chair',
-'member')`).** Any logged-in user edits their own `firstName`/`lastName`/`phone`/
-`address`. `role`/`roundtableId`/`roundtableIds` are silently ignored if present in the
-body — no legitimate self-edit would ever include them, so there's no permission
-boundary worth surfacing an error for (unlike the Chair-on-Member PATCH above, where a
-disallowed field is rejected outright). The target is always `req.session.userId`,
-never a body/param-supplied id, so this endpoint can never edit anyone else's record.
+**Admin-triggered password reset (`POST /api/admin/users/:id/send-reset`,
+`requireRole('admin')`).** Admin-only, unlike every other per-user Users action above —
+a Chair has no business initiating a password change on a Member's account. The target
+must be `active` (400 otherwise; a pending user has no password to reset). Reuses the
+exact same `createPasswordReset` call and 1-hour link as the public
+`POST /api/forgot-password` flow below, just triggered by an Admin on the user's behalf
+(e.g. a Member who's locked out and can't reach their own email) rather than by the
+user themselves.
+
+**Self-service profile (`GET/PATCH /api/users/me`, both `requireRole('admin', 'chair',
+'member')`).** `GET` returns the current session's own public user record — role,
+`roundtableId`/`roundtableIds`, and profile fields included, since the admin dashboard
+uses this to adapt its own UI to the logged-in user's role (e.g. hiding invite/edit
+controls a Chair's submission would just have been overridden or rejected anyway), not
+just to have permissions enforced server-side. The bootstrap `ADMIN_USER`/`ADMIN_PASS`
+session (see Session claims above) has no Users-table record and thus no `userId` to
+look up — `GET` reports `{ role: 'admin', bootstrap: true }` for that case rather than
+404ing, since a missing profile and "nothing to fetch for this legitimate session" are
+different things. `PATCH` lets any logged-in user edit their own `firstName`/
+`lastName`/`phone`/`address`; `role`/`roundtableId`/`roundtableIds` are silently ignored
+if present in the body — no legitimate self-edit would ever include them, so there's no
+permission boundary worth surfacing an error for (unlike the Chair-on-Member PATCH
+above, where a disallowed field is rejected outright). Both always target
+`req.session.userId`, never a body/param-supplied id, so neither endpoint can ever
+touch anyone else's record.
 
 **Chair content access — Initiatives and Investments (`POST/PUT/DELETE
 /api/admin/initiatives[/:id]`, `POST/PUT/DELETE /api/admin/investments[/:id]`, both

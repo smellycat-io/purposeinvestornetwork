@@ -107,20 +107,44 @@ stores its SHA-256 hash — a DB read or leak alone can't be replayed as a usabl
 Follow this pattern for any future token-based flow (e.g. chair-issued member invites):
 generate, hash for storage, compare with `crypto.timingSafeEqual`.
 
-### Session auth — currently flat
+### Session auth
 
-`shared/auth.js`'s `requireAdmin` only checks `req.session.loggedIn` — it does not
-distinguish Admin from Chair from Member. Any role-aware route needs its own middleware
-built alongside (not instead of) `requireAdmin`, checking a role/roundtable claim on the
-session or user record. Don't scatter role checks inline in route handlers — centralize
-them in `shared/auth.js` the way `requireAdmin` already is.
+`req.session.loggedIn` marks any authenticated session; `req.session.role` and
+`req.session.roundtableId` (set at login in `routes/auth.js`) carry the Admin/Chair/
+Member distinction on top of it. `shared/auth.js` exposes both `requireAdmin` (flat —
+checks only `loggedIn`, no role distinction) and `requireRole(...roles)` (checks
+`req.session.role` against an allowlist; JSON 401/403 for `/api/*` routes, a redirect
+for page routes). Not every route is migrated to `requireRole` yet — see
+`docs/DATA-MODEL.md`'s API Endpoints table for exactly which ones are. A new role-aware
+route should use `requireRole`, not a bespoke check; don't scatter role logic inline in
+route handlers — centralize it in `shared/auth.js` the way both middlewares already are.
+
+**The bootstrap `ADMIN_USER`/`ADMIN_PASS` login must stay reachable and functional
+independent of the Users table, DynamoDB, or any GSI's health.** It's the
+account-recovery path of last resort — if a Users-table lookup can ever block it,
+there's no way back in when that table or its indexes break. `routes/auth.js`'s login
+handler enforces this by wrapping only the `findUserByEmail` call in its own
+try/catch, falling through to the bootstrap check on failure exactly as if no user
+record existed. **Never make the bootstrap path depend on a successful database call
+first** — that's the specific mistake behind the 2026-09-17 incident: the
+`email-index` GSI wasn't provisioned before the role rollout deployed,
+`findUserByEmail` threw, and the single try/catch then wrapping the whole handler
+treated that as a hard failure — locking out the bootstrap admin along with every real
+account, since a `catch` meant for genuinely unexpected errors had quietly become the
+only thing standing between a routine index outage and the last-resort login. Any
+future change to this handler must preserve the try/catch split.
 
 ### Error handling
 
 `shared/asyncRoute.js` wraps route handlers so every route doesn't repeat try/catch →
 `captureException` → 500 JSON boilerplate. Handlers still return their own status codes
 for expected failures (400s, 404s). **Every new route goes through `asyncRoute`, not a
-bare async handler.**
+bare async handler.** Pass `{ verbose: true }` as the third argument to fold the raw
+`error.message` into the 500 response as `detail`, on top of the Sentry report every
+route already gets — but only for a route reachable after authenticating (behind
+`requireAdmin`/`requireRole`). Never pass it on a public route (accept-invite,
+forgot/reset-password, subscribe, survey): an unauthenticated caller could otherwise
+use a 500's detail to probe internals a generic message deliberately hides.
 
 ## Docs Sync
 
@@ -187,16 +211,17 @@ a timer or against the whole repo at once.
 - Watch for "one-off" scripts or quick prototypes that quietly become permanent — either
   clean them up to match project standards or remove them, don't let temporary code
   linger alongside the real systems
-- `README.md` and `server.test.js` are currently out of date relative to the DynamoDB/
-  Lambda architecture actually in use (they still describe the original SQLite
-  prototype) — don't treat them as current-state documentation until they're updated
-  (see Docs Sync above)
 
 ## Git Workflow
 
 - All changes on feature/working branches — no direct commits to `stage` or `main`
 - Manual merge only: feature branch → `stage` (test) → `main` (production). No
   automated or Claude-initiated merges into either branch.
+- **Every PR's base branch is `stage`, never `main`.** `gh pr create` defaults to the
+  repo's default branch — pass `--base stage` explicitly every time, since the default
+  will otherwise be wrong. The one exception is the recurring `stage` → `main`
+  promotion PR itself, which is base `main` / head `stage` by definition — that's the
+  only PR that should ever target `main` directly.
 - `deploy.yml` runs on push to `main` (production); `deploy-stage.yml` on push to
   `stage`
 - **Branch naming**: `feature/short-description` for new functionality
@@ -232,6 +257,13 @@ a timer or against the whole repo at once.
   can't exercise. State this plainly in the PR description (e.g. 'Needs a staging pass
   before merging to main: <specific reason>') rather than assuming it's implied by the
   change touching infra-adjacent code.
+- **The chat-facing report adds a mini summary and the original prompt — it doesn't
+  replace the PR's own full summary.** When wrapping up a task in the terminal/chat,
+  give a short summary of what shipped, then quote back the prompt/instructions this
+  work was built from, verbatim. Lets Elise confirm at a glance that the request and
+  the delivery match, without opening the PR. The PR description still gets its full
+  summary as already required above — this chat-facing mini summary is an addition
+  for quick confirmation, not a shorter replacement for it.
 
 ## Comments & Documentation
 
@@ -249,12 +281,9 @@ worth a line explaining *why* a table would opt in or out.
 ## Testing
 
 - **Framework**: Jest + Supertest (already in `devDependencies`)
-- `server.test.js` currently tests against the old SQLite-backed `index.js` path and is
-  stale relative to the DynamoDB-only backend — needs updating to reflect current routes
-  before it's trustworthy as a regression check
 - Prioritize testing anything with conditional branching that's easy to get subtly
   wrong: `access.js` gating logic, token hashing/expiry in `users.js`, slug generation
-  in `repository.js`, and (once built) role/roundtable-scoping logic for Chairs
+  in `repository.js`, and role/roundtable-scoping logic for Chairs
 - Tests should fail loudly and specifically — assert the actual expected value (the
   exact role, the exact filtered list), not just "no exception thrown" — so a broken
   test tells you what's wrong, not just that something is

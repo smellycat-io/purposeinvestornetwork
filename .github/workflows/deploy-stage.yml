@@ -92,10 +92,12 @@ jobs:
 
       - name: Apply environment variables to stage Lambda
         env:
-          # Hardcoded, not a secret — see deploy.yml for why (bootstrap
-          # fallback identity, not a credential; must never match a real
-          # Users-table email or it silently makes ADMIN_PASS unreachable).
-          ADMIN_USER: admin
+          # ADMIN_USER_STAGE wins if set (any format, email included — see
+          # the validation below for why that's an explicit, accepted
+          # choice on stage specifically); falls back to the literal
+          # "admin" otherwise, same bootstrap identity prod hardcodes (see
+          # deploy.yml) when stage has no override of its own.
+          ADMIN_USER: ${{ secrets.ADMIN_USER_STAGE || 'admin' }}
           ADMIN_PASS: ${{ secrets.ADMIN_PASS_STAGE }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET_STAGE }}
           # Hardcoded, not a secret — see deploy.yml for why (a Sentry DSN
@@ -199,8 +201,18 @@ jobs:
           import re
           if current['SENTRY_DSN'] and not re.match(r'^https://[^@\s]+@[^/\s]+\.ingest\.[^/\s]+\.sentry\.io/\d+$', current['SENTRY_DSN']):
               raise SystemExit(f"SENTRY_DSN does not look like a valid Sentry DSN: {current['SENTRY_DSN']!r}")
-          if '@' in current['ADMIN_USER'] or not current['ADMIN_USER']:
-              raise SystemExit(f"ADMIN_USER must be a non-empty, non-email bootstrap identifier, got: {current['ADMIN_USER']!r}")
+          # Stage deliberately does NOT reject an email here, unlike
+          # production (see deploy.yml) — Elise chose to allow
+          # ADMIN_USER_STAGE in any format, email included, accepting the
+          # residual risk production's hardcode exists to avoid: if this
+          # value ever matches a real stage Users-table account's email,
+          # it silently shadows ADMIN_PASS as that account's login check.
+          # Lower stakes on stage than prod, and an explicit choice — not
+          # an oversight. Still required to be non-empty; the ADMIN_USER
+          # env above always resolves to at least "admin" via its `||`
+          # fallback, so this should never actually trip in practice.
+          if not current['ADMIN_USER']:
+              raise SystemExit('ADMIN_USER must be a non-empty bootstrap identifier.')
 
           try:
               subprocess.check_call([

@@ -8,6 +8,8 @@
     press: [],
     investments: [],
     events: [],
+    users: [],
+    me: null,
   };
 
   const POST_TYPES_WITH_MEMBER_ONLY = ['education'];
@@ -47,11 +49,35 @@
       try {
         const body = await response.json();
         if (body && body.error) message = body.error;
+        // Only present on routes that opt into it server-side
+        // (asyncRoute's `verbose` option) — the raw exception message
+        // behind an unexpected 500, folded into the toast so "unable to
+        // X" isn't the whole story.
+        if (body && body.detail) message += ': ' + body.detail;
       } catch (_) { /* ignore */ }
       throw new Error(message);
     }
     if (response.status === 204) return null;
     return response.json();
+  }
+
+  // Fetched once (cached as a promise, not just state.me) so the dashboard
+  // can adapt its own UI to the logged-in user's role — e.g. hiding invite/
+  // edit controls a Chair's submission would just have been overridden or
+  // rejected anyway — not just enforce permissions server-side. A bootstrap
+  // ADMIN_USER/ADMIN_PASS session comes back as { role: 'admin', bootstrap:
+  // true }, with no id/roundtableId — every call site below checks
+  // state.me.role, which is always present either way. Callers that need
+  // state.me before the page-load fetch resolves await this same in-flight
+  // request instead of firing a second one.
+  let currentUserPromise = null;
+  function loadCurrentUser() {
+    if (!currentUserPromise) {
+      currentUserPromise = api('/api/users/me')
+        .then((me) => { state.me = me; return me; })
+        .catch((err) => { showToast('Unable to load your profile: ' + err.message, true); return null; });
+    }
+    return currentUserPromise;
   }
 
   // --- Generic CRUD panel ---
@@ -823,54 +849,265 @@
 
   // --- Users ---
   //
-  // Not a createCrudPanel: invite-by-email (no title/body form), no edit
-  // flow, and a table layout rather than .list-item rows.
+  // Not a createCrudPanel: invite-by-email and edit-by-PATCH are different
+  // shapes, status/level filtering sits above the table, and this is a
+  // table layout rather than .list-item rows.
 
-  async function loadUsersTab() {
+  function isChairSession() {
+    return !!(state.me && state.me.role === 'chair');
+  }
+
+  // Pending + inviteExpiresAt in the past reads as "Expired," not
+  // "Pending" — same status value server-side (only Admin/Chair action
+  // availability differs: both are still resendable), but the dashboard
+  // should make a stale invite visually obvious rather than leaving it
+  // looking identical to a fresh one.
+  function userStatusKey(u) {
+    if (u.status === 'active') return 'active';
+    if (u.status === 'pending') {
+      return u.inviteExpiresAt && new Date(u.inviteExpiresAt).getTime() < Date.now() ? 'expired' : 'pending';
+    }
+    return u.status;
+  }
+
+  const USER_STATUS_LABELS = { active: 'Active', pending: 'Pending', expired: 'Expired' };
+
+  function roundtableLabel(u) {
+    if (u.role === 'chair') {
+      const rt = state.roundtables.find((r) => r.id === u.roundtableId);
+      return rt ? rt.name : '—';
+    }
+    if (u.role === 'member') {
+      const names = (u.roundtableIds || [])
+        .map((id) => (state.roundtables.find((r) => r.id === id) || {}).name)
+        .filter(Boolean);
+      return names.length ? names.join(', ') : 'None';
+    }
+    return '—';
+  }
+
+  function renderUsersTable() {
     const tbody = document.getElementById('users-rows');
-    try {
-      const users = await api('/api/admin/users');
-      if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="muted">No users yet.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = users.map((u) => {
-        const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
-        return `
+    const statusFilter = document.getElementById('users-filter-status').value;
+    const levelFilter = document.getElementById('users-filter-level').value;
+    const chairSession = isChairSession();
+
+    const filtered = state.users.filter((u) => {
+      if (statusFilter !== 'all' && userStatusKey(u) !== statusFilter) return false;
+      if (levelFilter !== 'all' && u.role !== levelFilter) return false;
+      return true;
+    });
+
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="muted">No users match these filters.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((u) => {
+      const name = [u.firstName, u.lastName].filter(Boolean).join(' ') || '—';
+      const statusKey = userStatusKey(u);
+      const canResend = statusKey === 'pending' || statusKey === 'expired';
+      const removeLabel = chairSession ? 'Remove from roundtable' : 'Remove';
+      return `
         <tr data-id="${escapeHtml(u.id)}">
-          <td>${escapeHtml(name || '—')}</td>
+          <td>${escapeHtml(name)}</td>
           <td>${escapeHtml(u.email)}</td>
-          <td>${escapeHtml(u.phone || '—')}</td>
-          <td>${escapeHtml(u.status)}</td>
-          <td>${escapeHtml(u.createdAt)}</td>
-          <td><button class="btn-small danger" data-action="delete-user" type="button">Remove</button></td>
+          <td>${escapeHtml(u.role || '—')}</td>
+          <td>${escapeHtml(roundtableLabel(u))}</td>
+          <td>${escapeHtml(USER_STATUS_LABELS[statusKey] || statusKey)}</td>
+          <td>${escapeHtml(u.createdAt || '—')}</td>
+          <td>${u.status === 'pending' && u.inviteExpiresAt ? escapeHtml(u.inviteExpiresAt) : '—'}</td>
+          <td class="list-item-actions">
+            ${!chairSession ? '<button class="btn-small" data-action="edit-user" type="button">Edit</button>' : ''}
+            ${canResend ? '<button class="btn-small" data-action="resend-invite" type="button">Resend invite</button>' : ''}
+            ${!chairSession && statusKey === 'active' ? '<button class="btn-small" data-action="send-reset" type="button">Send reset email</button>' : ''}
+            <button class="btn-small danger" data-action="delete-user" type="button">${removeLabel}</button>
+          </td>
         </tr>
       `;
-      }).join('');
+    }).join('');
+  }
+
+  async function loadUsersTab() {
+    try {
+      await loadCurrentUser();
+      const [users, roundtables] = await Promise.all([
+        api('/api/admin/users'),
+        state.roundtables.length ? Promise.resolve(state.roundtables) : api('/api/roundtables'),
+      ]);
+      state.users = users;
+      state.roundtables = roundtables;
+      populateInviteRoundtableFields();
+      updateInviteFieldVisibility();
+      renderUsersTable();
     } catch (err) {
-      tbody.innerHTML = '<tr><td colspan="6" class="muted">Failed to load users.</td></tr>';
+      document.getElementById('users-rows').innerHTML = '<tr><td colspan="8" class="muted">Failed to load users.</td></tr>';
       showToast(err.message, true);
     }
+  }
+
+  // --- Invite form ---
+
+  // A Chair-issued invite always becomes role: 'member' onto the Chair's
+  // own Roundtable regardless of what's submitted (routes/users.js ignores
+  // Level/Roundtable entirely once the requester is a Chair), so a Chair
+  // session hides both and shows a one-line explanation instead. An Admin
+  // session shows Level and swaps between the Chair (single roundtable)
+  // and Member (multi roundtable, optional) fields based on the currently
+  // selected Level.
+  function updateInviteFieldVisibility() {
+    const chairSession = isChairSession();
+    document.getElementById('invite-chair-note').style.display = chairSession ? 'block' : 'none';
+    document.getElementById('invite-level-row').style.display = chairSession ? 'none' : 'flex';
+    if (chairSession) {
+      document.getElementById('invite-roundtable-chair-field').style.display = 'none';
+      document.getElementById('invite-roundtable-member-field').style.display = 'none';
+      return;
+    }
+    const level = document.getElementById('invite-level').value;
+    document.getElementById('invite-roundtable-chair-field').style.display = level === 'chair' ? 'flex' : 'none';
+    document.getElementById('invite-roundtable-member-field').style.display = level === 'member' ? 'block' : 'none';
+  }
+
+  function populateInviteRoundtableFields() {
+    const select = document.getElementById('invite-roundtable-id');
+    select.innerHTML = state.roundtables.length
+      ? state.roundtables.map((rt) => `<option value="${escapeHtml(rt.id)}">${escapeHtml(rt.name)}</option>`).join('')
+      : '<option value="">No roundtables yet — create one first.</option>';
+    renderRoundtableChecks('invite-roundtable-checks', []);
   }
 
   async function sendInvite(event) {
     event.preventDefault();
     const email = document.getElementById('invite-email').value.trim();
+    const note = document.getElementById('invite-note').value.trim();
+    const payload = { email };
+    if (note) payload.note = note;
+
+    // A Chair session never submits Level/Roundtable — those controls are
+    // hidden (updateInviteFieldVisibility), and routes/users.js ignores
+    // them anyway once the requester is a Chair.
+    if (!isChairSession()) {
+      const level = document.getElementById('invite-level').value;
+      payload.role = level;
+      if (level === 'chair') {
+        payload.roundtableId = document.getElementById('invite-roundtable-id').value || null;
+      } else if (level === 'member') {
+        payload.roundtableIds = Array.from(document.querySelectorAll('#invite-roundtable-checks input:checked')).map((el) => el.value);
+      }
+      // level === 'admin': no roundtable field applies — routes/users.js
+      // forces roundtableId/roundtableIds to null/[] for any role but
+      // chair/member regardless, but there's nothing meaningful to read
+      // from the (hidden) roundtable controls here either way.
+    }
+
     try {
-      const result = await api('/api/admin/users/invite', { method: 'POST', body: JSON.stringify({ email }) });
-      showToast(result.emailed ? 'Invite sent.' : 'Invite created, but the email failed to send.', !result.emailed);
+      const result = await api('/api/admin/users/invite', { method: 'POST', body: JSON.stringify(payload) });
+      if (result.emailed) {
+        showToast('Invite sent.');
+      } else {
+        showToast('Invite created, but the email failed to send. Use Resend invite once that’s fixed.', true);
+      }
       document.getElementById('invite-form').reset();
+      updateInviteFieldVisibility();
       await loadUsersTab();
     } catch (err) {
       showToast(err.message, true);
     }
   }
 
+  // --- Edit form (Admin only) ---
+
+  function updateEditRoundtableVisibility() {
+    const level = document.getElementById('user-edit-level').value;
+    document.getElementById('user-edit-roundtable-chair-field').style.display = level === 'chair' ? 'flex' : 'none';
+    document.getElementById('user-edit-roundtable-member-field').style.display = level === 'member' ? 'block' : 'none';
+  }
+
+  function populateEditRoundtableSelect() {
+    const select = document.getElementById('user-edit-roundtable-id');
+    select.innerHTML = state.roundtables.length
+      ? state.roundtables.map((rt) => `<option value="${escapeHtml(rt.id)}">${escapeHtml(rt.name)}</option>`).join('')
+      : '<option value="">No roundtables yet — create one first.</option>';
+  }
+
+  function openEditUser(user) {
+    populateEditRoundtableSelect();
+    document.getElementById('user-edit-id').value = user.id;
+    document.getElementById('user-edit-first-name').value = user.firstName || '';
+    document.getElementById('user-edit-last-name').value = user.lastName || '';
+    document.getElementById('user-edit-phone').value = user.phone || '';
+    document.getElementById('user-edit-address').value = user.address || '';
+    document.getElementById('user-edit-level').value = user.role || 'member';
+    document.getElementById('user-edit-roundtable-id').value = user.roundtableId || '';
+    renderRoundtableChecks('user-edit-roundtable-checks', user.roundtableIds || []);
+    updateEditRoundtableVisibility();
+    document.getElementById('user-edit-form').classList.remove('hidden');
+  }
+
+  function closeEditUser() {
+    document.getElementById('user-edit-form').classList.add('hidden');
+    document.getElementById('user-edit-form').reset();
+  }
+
+  async function saveEditUser(event) {
+    event.preventDefault();
+    const id = document.getElementById('user-edit-id').value;
+    const level = document.getElementById('user-edit-level').value;
+    const payload = {
+      firstName: document.getElementById('user-edit-first-name').value.trim(),
+      lastName: document.getElementById('user-edit-last-name').value.trim(),
+      phone: document.getElementById('user-edit-phone').value.trim() || null,
+      address: document.getElementById('user-edit-address').value.trim() || null,
+      role: level,
+    };
+    if (level === 'chair') {
+      payload.roundtableId = document.getElementById('user-edit-roundtable-id').value || null;
+    } else if (level === 'member') {
+      payload.roundtableIds = Array.from(document.querySelectorAll('#user-edit-roundtable-checks input:checked')).map((el) => el.value);
+    }
+
+    try {
+      await api('/api/admin/users/' + id, { method: 'PATCH', body: JSON.stringify(payload) });
+      showToast('User updated.');
+      closeEditUser();
+      await loadUsersTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  // --- Row actions ---
+
+  async function resendInvite(id) {
+    try {
+      const result = await api('/api/admin/users/' + id + '/resend-invite', { method: 'POST' });
+      showToast(result.emailed ? 'Invite resent.' : 'Invite reissued, but the email failed to send.', !result.emailed);
+      await loadUsersTab();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function sendResetEmailToUser(id) {
+    if (!confirm('Send a password reset email to this user?')) return;
+    try {
+      const result = await api('/api/admin/users/' + id + '/send-reset', { method: 'POST' });
+      showToast(result.emailed ? 'Reset email sent.' : 'Reset created, but the email failed to send.', !result.emailed);
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
   async function deleteUser(id) {
-    if (!confirm('Remove this user? They will no longer be able to log in.')) return;
+    const chairSession = isChairSession();
+    const confirmMessage = chairSession
+      ? 'Remove this user from your Roundtable? They keep access to any other Roundtables they belong to.'
+      : 'Remove this user? They will no longer be able to log in.';
+    if (!confirm(confirmMessage)) return;
     try {
       await api('/api/admin/users/' + id, { method: 'DELETE' });
-      showToast('User removed.');
+      showToast(chairSession ? 'User removed from your Roundtable.' : 'User removed.');
       await loadUsersTab();
     } catch (err) {
       showToast(err.message, true);
@@ -879,10 +1116,26 @@
 
   function initUsersTab() {
     document.getElementById('invite-form').addEventListener('submit', sendInvite);
+    document.getElementById('invite-level').addEventListener('change', updateInviteFieldVisibility);
+    document.getElementById('user-edit-form').addEventListener('submit', saveEditUser);
+    document.getElementById('user-edit-cancel-btn').addEventListener('click', closeEditUser);
+    document.getElementById('user-edit-level').addEventListener('change', updateEditRoundtableVisibility);
+    document.getElementById('users-filter-status').addEventListener('change', renderUsersTable);
+    document.getElementById('users-filter-level').addEventListener('change', renderUsersTable);
     document.getElementById('users-rows').addEventListener('click', (event) => {
-      const btn = event.target.closest('[data-action="delete-user"]');
+      const btn = event.target.closest('button[data-action]');
       if (!btn) return;
-      deleteUser(btn.closest('tr').dataset.id);
+      const id = btn.closest('tr').dataset.id;
+      if (btn.dataset.action === 'edit-user') {
+        const user = state.users.find((u) => u.id === id);
+        if (user) openEditUser(user);
+      } else if (btn.dataset.action === 'resend-invite') {
+        resendInvite(id);
+      } else if (btn.dataset.action === 'send-reset') {
+        sendResetEmailToUser(id);
+      } else if (btn.dataset.action === 'delete-user') {
+        deleteUser(id);
+      }
     });
   }
 
@@ -894,6 +1147,7 @@
     initInvestmentsEventsTab();
     initSettingsTab();
     initUsersTab();
+    loadCurrentUser();
     loadSurvey();
   });
 })();
