@@ -26,9 +26,11 @@ const routes = [];
 const standaloneLayers = [];
 collectRoutes(app._router.stack, routes, standaloneLayers);
 
-const adminRoutes = routes.filter((r) => r.path === '/admin' || r.path.startsWith('/api/admin'));
+const adminRoutes = routes.filter(
+  (r) => r.path === '/admin' || r.path === '/member' || r.path.startsWith('/api/admin')
+);
 
-describe('every /api/admin and /admin route carries a requireRole gate', () => {
+describe('every /api/admin, /admin, and /member route carries a requireRole gate', () => {
   test('the walk actually found admin routes (guards against the walk itself silently finding nothing)', () => {
     expect(adminRoutes.length).toBeGreaterThan(0);
   });

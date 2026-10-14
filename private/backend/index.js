@@ -25,6 +25,7 @@ app.use(express.static(join(__dirname, '../../front-end')));
 
 app.use(require('./routes/auth.js'));
 app.use(require('./routes/admin.js'));
+app.use(require('./routes/member.js'));
 app.use(require('./routes/roundtables.js'));
 app.use(require('./routes/initiatives.js'));
 app.use(require('./routes/posts.js'));

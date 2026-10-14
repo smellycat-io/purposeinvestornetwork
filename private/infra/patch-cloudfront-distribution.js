@@ -43,6 +43,7 @@ const BACKEND_PATH_PATTERNS = [
   '/logout',
   '/admin',
   '/admin/*',
+  '/member',
   '/api/*',
   '/env.js',
   '/sentry-test',
