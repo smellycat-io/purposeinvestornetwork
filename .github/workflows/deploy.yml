@@ -13,10 +13,40 @@ jobs:
       - name: Merge shared assets into front-end for deployment
         run: cp -r shared/. front-end/
 
-      - name: Deploy frontend to public S3
+      # Two syncs, not one: HTML/JS/CSS aren't content-hashed (same file
+      # name on every deploy), so without an explicit Cache-Control they
+      # fall back to CloudFront's/the browser's own heuristic caching —
+      # exactly what let a page opened before a deploy keep serving its old
+      # HTML alongside newly-deployed JS after one. Everything else (images,
+      # fonts, etc.) keeps the default behavior, since those just get new
+      # filenames when they change.
+      - name: Deploy frontend to public S3 (everything except HTML/JS/CSS)
         uses: jakejarvis/s3-sync-action@v0.5.1
         with:
-          args: --delete --exclude ".env" --exclude ".env.*"
+          args: --delete --exclude ".env" --exclude ".env.*" --exclude "*.html" --exclude "*.js" --exclude "*.css"
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          SOURCE_DIR: ./front-end
+
+      # --exclude "*" then --include "<pattern>" is the standard aws s3 sync
+      # idiom for "only these file types" — filters are evaluated in order
+      # given, last match wins, so the three --include flags re-admit HTML/
+      # JS/CSS after the blanket exclude; the trailing .env excludes are
+      # redundant in practice (no .env file matches those three patterns)
+      # but kept so the exclusion is explicit here too, not just inferred.
+      # --delete in *this* sync only ever removes stale HTML/JS/CSS objects
+      # — a file outside the --include set is invisible to this sync's
+      # --delete the same way it would be to any other --exclude — so
+      # paired with the first sync's own --delete (which only ever sees
+      # non-HTML/JS/CSS files), stale objects of every kind still get
+      # cleaned up between the two.
+      - name: Deploy frontend HTML/JS/CSS to public S3 (no-cache)
+        uses: jakejarvis/s3-sync-action@v0.5.1
+        with:
+          args: --delete --exclude "*" --include "*.html" --include "*.js" --include "*.css" --exclude ".env" --exclude ".env.*" --cache-control "no-cache"
         env:
           AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
