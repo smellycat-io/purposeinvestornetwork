@@ -93,9 +93,78 @@
     if (!currentUserPromise) {
       currentUserPromise = api('/api/users/me')
         .then((me) => { state.me = me; return me; })
-        .catch((err) => { showToast('Unable to load your profile: ' + err.message, true); return null; });
+        .catch(() => { showProfileLoadError(); return null; });
     }
     return currentUserPromise;
+  }
+
+  // Fails closed: no role was ever confirmed, so every tab and admin-only
+  // control stays exactly as hidden as it already was before this ran
+  // (admin.css's data-role/admin-only rules default closed) — this just
+  // additionally hides every *other* tab too, and replaces them with an
+  // explicit way to retry instead of a dashboard with nothing in it.
+  function showProfileLoadError() {
+    document.body.classList.add('has-profile-error');
+    const el = document.getElementById('profile-load-error');
+    if (el) el.classList.remove('hidden');
+  }
+
+  function initProfileLoadError() {
+    document.getElementById('profile-load-error-reload-btn').addEventListener('click', () => window.location.reload());
+  }
+
+  // "Signed in as <name or email> (<Level>, <roundtable name>)" — the
+  // bootstrap ADMIN_USER/ADMIN_PASS session has no profile or roundtable to
+  // show at all, so it gets the one-line fallback instead.
+  function renderSessionInfo() {
+    const el = document.getElementById('session-info');
+    const me = state.me;
+    if (!el || !me) return;
+    if (me.bootstrap) {
+      el.textContent = 'Signed in as admin';
+      return;
+    }
+    const name = [me.firstName, me.lastName].filter(Boolean).join(' ') || me.email || '';
+    const levelLabel = isChairSession() ? 'Chair' : 'Admin';
+    if (isChairSession()) {
+      const roundtable = state.roundtables.find((rt) => rt.id === me.roundtableId);
+      el.textContent = `Signed in as ${name} (${levelLabel}, ${roundtable ? roundtable.name : 'no roundtable'})`;
+    } else {
+      el.textContent = `Signed in as ${name} (${levelLabel})`;
+    }
+  }
+
+  // admin.css's `body:not([data-role="admin"]) .admin-only` rule hides
+  // Admin-only static markup from first paint, before this runs — setting
+  // data-role here only ever *reveals* it for an Admin/bootstrap session,
+  // never the reverse, so there's nothing to flash for a Chair session
+  // either way.
+  async function applySessionRole() {
+    const me = state.me;
+    // Only an Admin or Chair session ever runs this file at all (GET /admin
+    // itself is requireRole('admin', 'chair')), so the two helpers already
+    // cover every case here.
+    if (me) document.body.dataset.role = isAdminSession() ? 'admin' : 'chair';
+    if (isChairSession() && !state.roundtables.length) {
+      try {
+        state.roundtables = await api('/api/roundtables');
+      } catch (_) {
+        // Header still shows Level without a roundtable name — not worth a
+        // toast on its own, the rest of the dashboard surfaces the same
+        // failure once a tab that actually needs roundtables loads.
+      }
+    }
+    renderSessionInfo();
+    applyDefaultTab();
+  }
+
+  // The default active tab is always the first one this role can see, so a
+  // hidden tab (Press, for a Chair) never ends up the one left selected.
+  function applyDefaultTab() {
+    const role = currentRole();
+    const tab = DashboardVisibility.defaultTab(role);
+    document.querySelectorAll('.tab-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === 'tab-' + tab));
   }
 
   // --- Generic CRUD panel ---
@@ -655,7 +724,15 @@
       document.getElementById('post-id').value = post ? post.id : '';
       document.getElementById('post-title').value = post ? post.title : '';
       document.getElementById('post-author').value = post ? post.author || '' : '';
-      document.getElementById('post-type').value = post ? post.type : 'blog';
+      // A Chair's Post type locks to 'update' — the only type tied to an
+      // Initiative they can reach (routes/posts.js's isPostInChairScope) —
+      // on both a new Post and an edit, since every Post a Chair can open
+      // is already type:'update' per the backend's own scoping.
+      const lockedType = DashboardVisibility.lockedPostType(currentRole());
+      const typeSelect = document.getElementById('post-type');
+      typeSelect.value = lockedType || (post ? post.type : 'blog');
+      typeSelect.disabled = !!lockedType;
+      document.getElementById('post-initiative').required = !!lockedType;
       document.getElementById('post-member-only').checked = post ? !!post.memberOnly : false;
       document.getElementById('post-excerpt').value = post ? post.excerpt || '' : '';
       document.getElementById('post-purchase-url').value = post ? post.purchaseUrl || '' : '';
@@ -697,6 +774,7 @@
   });
 
   async function loadPostsTab() {
+    await loadCurrentUser();
     try {
       const [posts, initiatives] = await Promise.all([
         api('/api/admin/posts'),
@@ -719,8 +797,23 @@
 
   // --- Roundtables & Initiatives ---
 
-  function renderRoundtableChecks(containerId, selectedIds) {
+  // lockToId (a Chair's own roundtableId — see DashboardVisibility's
+  // lockedRoundtableId) renders a single checkbox, pre-checked and
+  // disabled, instead of the full list: a Chair has no authority over any
+  // Roundtable but their own (routes/initiatives.js, routes/investments.js),
+  // so that's the only choice their form ever actually offers. A disabled
+  // checkbox still matches `:checked` in a querySelectorAll — only a native
+  // form submit excludes disabled fields, and buildPayload reads `.value`
+  // directly, not via FormData.
+  function renderRoundtableChecks(containerId, selectedIds, lockToId) {
     const container = document.getElementById(containerId);
+    if (lockToId) {
+      const rt = state.roundtables.find((r) => r.id === lockToId);
+      container.innerHTML = rt
+        ? `<label><input type="checkbox" value="${escapeHtml(rt.id)}" checked disabled> ${escapeHtml(rt.name)}</label>`
+        : '<span class="muted">Your roundtable could not be found.</span>';
+      return;
+    }
     const selected = new Set(selectedIds || []);
     if (!state.roundtables.length) {
       container.innerHTML = '<span class="muted">No roundtables yet — create one first.</span>';
@@ -742,7 +835,7 @@
     emptyMessage: 'No roundtables yet.',
     deleteConfirm: 'Delete this roundtable? Initiatives linked to it will keep their link until edited.',
     reload: () => loadContentTab(),
-    getItems: () => state.roundtables,
+    getItems: () => DashboardVisibility.visibleRoundtables(currentRole(), state.roundtables, currentRoundtableId()),
     buildPayload: () => ({
       name: document.getElementById('roundtable-name').value.trim(),
       description: document.getElementById('roundtable-description').value.trim(),
@@ -763,7 +856,9 @@
         </div>
         <div class="list-item-actions">
           <button class="btn-small" data-action="edit-roundtable" type="button">Edit</button>
-          <button class="btn-small danger" data-action="delete-roundtable" type="button">Delete</button>
+          ${DashboardVisibility.canDeleteRoundtable(currentRole())
+            ? '<button class="btn-small danger" data-action="delete-roundtable" type="button">Delete</button>'
+            : ''}
         </div>
       </div>
     `,
@@ -788,7 +883,11 @@
       document.getElementById('initiative-id').value = initiative ? initiative.id : '';
       document.getElementById('initiative-title').value = initiative ? initiative.title : '';
       document.getElementById('initiative-description').value = initiative ? initiative.description || '' : '';
-      renderRoundtableChecks('initiative-roundtable-checks', initiative ? initiative.roundtableIds : []);
+      renderRoundtableChecks(
+        'initiative-roundtable-checks',
+        initiative ? initiative.roundtableIds : [],
+        DashboardVisibility.lockedRoundtableId(currentRole(), currentRoundtableId())
+      );
       setImagePreview('initiative', initiative ? initiative.imageUrl : null);
     },
     renderItem: (initiative) => {
@@ -814,6 +913,7 @@
   });
 
   async function loadContentTab() {
+    await loadCurrentUser();
     try {
       const [roundtables, initiatives] = await Promise.all([
         api('/api/roundtables'),
@@ -939,7 +1039,11 @@
       document.getElementById('investment-title').value = investment ? investment.title : '';
       document.getElementById('investment-status').value = investment ? investment.status : 'open';
       document.getElementById('investment-initiative').value = investment ? investment.initiativeId || '' : '';
-      renderRoundtableChecks('investment-roundtable-checks', investment ? investment.roundtableIds : []);
+      renderRoundtableChecks(
+        'investment-roundtable-checks',
+        investment ? investment.roundtableIds : [],
+        DashboardVisibility.lockedRoundtableId(currentRole(), currentRoundtableId())
+      );
       document.getElementById('investment-description').value = investment ? stripHtml(investment.description || '') : '';
       document.getElementById('investment-outcome').value = investment ? stripHtml(investment.outcomeSummary || '') : '';
       document.getElementById('investment-member-only').checked = investment ? !!investment.memberOnly : false;
@@ -1017,10 +1121,16 @@
   });
 
   async function loadInvestmentsEventsTab() {
+    await loadCurrentUser();
     try {
+      // GET /api/admin/events is requireRole('admin') only, no Chair path
+      // (see routes/events.js) — fetching it for a Chair session would 403
+      // and surface as a failed-to-load toast for a section they can't see
+      // anyway (admin-only in admin.html), so it's skipped outright instead.
+      const canSeeEvents = DashboardVisibility.canSeeEvents(currentRole());
       const [investments, events, roundtables, initiatives] = await Promise.all([
         api('/api/admin/investments'),
-        api('/api/admin/events'),
+        canSeeEvents ? api('/api/admin/events') : Promise.resolve([]),
         state.roundtables.length ? Promise.resolve(state.roundtables) : api('/api/roundtables'),
         state.initiatives.length ? Promise.resolve(state.initiatives) : api('/api/admin/initiatives'),
       ]);
@@ -1080,6 +1190,22 @@
 
   function isChairSession() {
     return !!(state.me && state.me.role === 'chair');
+  }
+
+  function isAdminSession() {
+    return !!(state.me && state.me.role === 'admin');
+  }
+
+  // null when GET /api/users/me hasn't resolved yet or failed outright
+  // (showProfileLoadError handles the latter) — DashboardVisibility treats
+  // any role it doesn't explicitly recognize as having nothing to show,
+  // so this stays a fail-closed default rather than guessing 'admin'.
+  function currentRole() {
+    return state.me ? state.me.role : null;
+  }
+
+  function currentRoundtableId() {
+    return state.me ? state.me.roundtableId : null;
   }
 
   // Pending + inviteExpiresAt in the past reads as "Expired," not
@@ -1364,7 +1490,7 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     initTabs();
     initCampaignsTab();
     initPostsTab();
@@ -1373,7 +1499,17 @@
     initInvestmentsEventsTab();
     initSettingsTab();
     initUsersTab();
-    loadCurrentUser();
-    loadCampaignsTab();
+    initProfileLoadError();
+    // Awaited before the first render (Campaigns, below) so admin.css's
+    // data-role selector and every isAdminSession()/isChairSession() call a
+    // render function makes are already correct the first time anything
+    // paints — never a flash of the wrong role's controls followed by a
+    // second, corrected render.
+    await loadCurrentUser();
+    await applySessionRole();
+    // state.me is null when the profile load failed — showProfileLoadError
+    // already hid every tab, so there's nothing for Campaigns to render
+    // into, and fetching it would just risk a second, redundant toast.
+    if (state.me) loadCampaignsTab();
   });
 })();

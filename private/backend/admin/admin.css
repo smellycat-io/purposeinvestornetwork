@@ -27,7 +27,45 @@ body {
   margin-bottom: 20px;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
 .topbar h1 { margin: 0; font-size: 24px; }
+
+.session-info { color: var(--muted); font-size: 14px; }
+
+/* Admin-only static markup (a tab button, a whole panel, a "new" button)
+   fails closed: hidden the moment the stylesheet loads, before admin.js has
+   had a chance to confirm the session's role, and only revealed once
+   admin.js sets data-role="admin" on <body>. A Chair session never sets
+   that value, so this stays hidden for the whole session rather than
+   flashing on load. */
+body:not([data-role="admin"]) .admin-only { display: none; }
+
+.profile-load-error {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.profile-load-error p { margin: 0; }
+
+.profile-load-error.hidden { display: none; }
+
+/* GET /api/users/me failed — no role was ever confirmed, so every tab and
+   panel stays hidden (not just the admin-only ones) rather than falling
+   back to a guessed role's worth of controls. */
+body.has-profile-error .tabs,
+body.has-profile-error .tab-panel {
+  display: none;
+}
 
 .logout-link {
   color: var(--accent);
