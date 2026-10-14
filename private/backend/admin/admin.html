@@ -10,7 +10,10 @@
 <body>
 <div class="page">
   <header class="topbar">
-    <h1>PIN Admin</h1>
+    <div class="topbar-left">
+      <h1>PIN Admin</h1>
+      <span class="session-info" id="session-info"></span>
+    </div>
     <a href="/logout" class="logout-link">Log out</a>
   </header>
 
@@ -18,7 +21,7 @@
     <button class="tab-btn active" data-tab="campaigns" type="button">Campaigns</button>
     <button class="tab-btn" data-tab="posts" type="button">Posts &amp; Content</button>
     <button class="tab-btn" data-tab="content" type="button">Roundtables &amp; Initiatives</button>
-    <button class="tab-btn" data-tab="press" type="button">Press</button>
+    <button class="tab-btn admin-only" data-tab="press" type="button">Press</button>
     <button class="tab-btn" data-tab="investments-events" type="button">Investments &amp; Events</button>
     <button class="tab-btn" data-tab="settings" type="button">Settings</button>
     <button class="tab-btn" data-tab="users" type="button">Users</button>
@@ -166,7 +169,7 @@
       <div class="content-column">
         <div class="panel-header">
           <h2>Roundtables</h2>
-          <button id="roundtable-new-btn" class="btn btn-accent" type="button">New Roundtable</button>
+          <button id="roundtable-new-btn" class="btn btn-accent admin-only" type="button">New Roundtable</button>
         </div>
 
         <form id="roundtable-form" class="card form-card hidden">
@@ -239,7 +242,7 @@
     </div>
   </section>
 
-  <section id="tab-press" class="tab-panel">
+  <section id="tab-press" class="tab-panel admin-only">
     <div class="panel-header">
       <h2>Press</h2>
       <button id="press-new-btn" class="btn btn-accent" type="button">New Press Mention</button>
@@ -346,7 +349,7 @@
         </div>
       </div>
 
-      <div class="content-column">
+      <div class="content-column admin-only">
         <div class="panel-header">
           <h2>Events</h2>
           <button id="event-new-btn" class="btn btn-accent" type="button">New Event</button>
@@ -421,7 +424,8 @@
     <div class="panel-header">
       <h2>Change Password</h2>
     </div>
-    <p class="muted">Updates the admin login password immediately.</p>
+    <p class="muted">Updates your own login password immediately. Not available for the
+      bootstrap admin login — set up a real Admin account via the Users tab first.</p>
     <form id="password-form" class="card form-card">
       <label class="field">
         <span>Current password</span>
@@ -588,6 +592,7 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<script src="/admin/assets/dashboardVisibility.js"></script>
 <script src="/admin/assets/admin.js"></script>
 </body>
 </html>

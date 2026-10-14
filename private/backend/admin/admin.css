@@ -27,7 +27,23 @@ body {
   margin-bottom: 20px;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
 .topbar h1 { margin: 0; font-size: 24px; }
+
+.session-info { color: var(--muted); font-size: 14px; }
+
+/* Admin-only static markup (a tab button, a whole panel, a "new" button)
+   fails closed: hidden the moment the stylesheet loads, before admin.js has
+   had a chance to confirm the session's role, and only revealed once
+   admin.js sets data-role="admin" on <body>. A Chair session never sets
+   that value, so this stays hidden for the whole session rather than
+   flashing on load. */
+body:not([data-role="admin"]) .admin-only { display: none; }
 
 .logout-link {
   color: var(--accent);

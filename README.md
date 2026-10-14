@@ -80,21 +80,23 @@ Admin-triggered password reset), Chair-scoped Member management, Chair write and
 access to their own Roundtable's Initiatives/Posts/Investments, Chair access to their
 own Roundtable's own fields and the shared image library, and role-aware gating on
 every content route (Roundtables, Press, Events, Images included) and the admin
-dashboard page itself. A `/member` coming-soon page, with each role landing on its own
-home after login (Member → `/member`, Chair and Admin → `/admin`). Campaigns: durable
-results storage for the survey, newsletter, and membership waitlist, plus an always-on
-interest form on every Roundtable and Initiative page, with per-campaign results emails
-and copy-paste email lists in the admin dashboard. See `docs/DATA-MODEL.md`'s Role &
-Permission Model section for exactly how each role is scoped.
+dashboard page itself, including the dashboard UI itself: a Chair sees only the tabs
+and controls they can use (no Press, no Events, no unfiltered Roundtable/Initiative/
+Investment forms), so a Chair session no longer hits a failed-to-load toast for
+something the backend was always going to reject. A `/member` coming-soon page, with
+each role landing on its own home after login (Member → `/member`, Chair and Admin →
+`/admin`). Campaigns: durable results storage for the survey, newsletter, and
+membership waitlist, plus an always-on interest form on every Roundtable and Initiative
+page, with per-campaign results emails and copy-paste email lists in the admin
+dashboard. See `docs/DATA-MODEL.md`'s Role & Permission Model section for exactly how
+each role is scoped, including a per-role table of the admin dashboard's own tab and
+control visibility.
 
 **In progress**: the Member area is a coming-soon shell today — profile editing,
-education content, an events calendar, and a member news feed are still to come. The
-admin dashboard UI's role-awareness for Chair sessions isn't built yet either (every
-Chair session still sees every tab; where the backend now rejects or filters a Chair's
-request, they just get a failed-to-load toast, not a tab hidden outright). Role-aware
-`memberOnly` content visibility is also still open. See `docs/DATA-MODEL.md`'s "Not yet
-implemented" list at the end of the Role & Permission Model section for the full detail
-on both.
+education content, an events calendar, and a member news feed are still to come.
+Role-aware `memberOnly` content visibility is also still open. See `docs/DATA-MODEL.md`'s
+"Not yet implemented" list at the end of the Role & Permission Model section for the
+full detail.
 
 **Known gaps**: bulk email sending isn't built — Campaigns gives a copy-paste email
 list per campaign instead of sending from the dashboard directly.

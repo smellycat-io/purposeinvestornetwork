@@ -467,6 +467,31 @@ real unchecked-by-default checkbox, labeled with `composeConsentText(campaign.na
 value and `GET /api/roundtables/:slug` / `GET /api/initiatives/:slug`'s
 `interest.consentText`, so the two can't drift.
 
+**Admin dashboard UI, per role.** The backend gates and scopes every route above; the
+dashboard (`private/backend/admin/`) only adapts what it shows on top of that — the
+server remains the enforcement either way. `admin.js`'s `isAdminSession()`/
+`isChairSession()` read the session's own `GET /api/users/me` result (fetched once,
+cached as `currentUserPromise`) to decide; the pure role → visibility rules themselves
+live in `admin/dashboardVisibility.js`, kept separate from the DOM-touching rest of
+`admin.js` so they're assertable directly in Jest. Admin-only static markup (the Press
+tab, its panel, the Events column, "New Roundtable") carries an `admin-only` class,
+hidden by default via `body:not([data-role="admin"]) .admin-only` until `admin.js`
+confirms the role — fails closed, so there's nothing to flash while that confirmation
+is in flight. The bootstrap `ADMIN_USER`/`ADMIN_PASS` session sees exactly what an
+Admin sees (its `GET /api/users/me` result is `{ role: 'admin', bootstrap: true }`, same
+`role` the checks above key on) — the one difference is the header, which reads
+"Signed in as admin" instead of resolving a name.
+
+| Area | Admin | Chair |
+|---|---|---|
+| Tabs | All seven | All but Press |
+| Roundtables list | Every roundtable; New and Delete available | Only their own roundtable; Edit only, no New/Delete |
+| Initiative/Investment roundtable picker | Every roundtable, freely chosen | Locked to their own roundtable, pre-checked |
+| New Post | Any type | Type locked to `update`; Initiative required, limited to their in-scope initiatives |
+| Investments & Events tab | Both sections | Investments only — Events column hidden, `GET /api/admin/events` not even requested |
+| Settings tab | Change Password | Change Password (identical — there's nothing else in this tab for either role yet) |
+| Users tab | Full edit, Level/Roundtable on invite, resend, send-reset, full delete | No edit form, no Level/Roundtable on invite (always Member on their own roundtable), resend, "Remove from roundtable" instead of delete |
+
 **Not yet implemented:**
 - The real Member-facing area. `GET /member` (`private/backend/member/member.html`,
   distinct from the public `front-end/` pages and the admin dashboard in
@@ -482,14 +507,6 @@ value and `GET /api/roundtables/:slug` / `GET /api/initiatives/:slug`'s
   including a logged-in Member — currently sees full `memberOnly` content; every viewer
   gets the same redacted preview or hidden item a logged-out visitor would. (The admin
   dashboard's own CRUD endpoints don't route through `access.js` and are unaffected.)
-- A role-aware admin dashboard UI: every backend route is now correctly role-gated and
-  Chair-scoped (see above), but `private/backend/admin/admin.js` itself still shows the
-  same tabs and unfiltered forms to every session regardless of role, outside the Users
-  tab. A Chair currently sees every tab (Press and Events included, where every write
-  is rejected outright) and, where the backend now rejects or filters their request,
-  only a generic failed-to-load toast — not a tab hidden outright or a form pre-scoped
-  to what they're actually authorized to touch. (A Member no longer reaches this
-  dashboard at all — see `GET /member` above.)
 - Campaigns tab: CSV export and bulk sending. The Copy Emails button (a
   comma-separated, deduped, lowercased list via the clipboard) is the only
   results-handling built so far — exporting to a file or sending a batch email
