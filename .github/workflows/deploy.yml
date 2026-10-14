@@ -13,6 +13,17 @@ jobs:
       - name: Merge shared assets into front-end for deployment
         run: cp -r shared/. front-end/
 
+      # Plain `aws s3 sync` via a real shell step, not jakejarvis/s3-sync-
+      # action — that action passes its `args` input through a Docker
+      # entrypoint that doesn't preserve shell quoting, so a bare `--exclude
+      # "*"` (needed below) gets glob-expanded against the container's own
+      # working directory instead of being passed through literally. Caught
+      # this the hard way: it broke the very first stage deploy under the
+      # two-sync design, failing with "Unknown options: docs,front-end,..."
+      # — the actual top-level contents of the repo checkout. A real `run:`
+      # step is executed directly by the runner's own shell, where quoting
+      # works the way it's written here.
+      #
       # Two syncs, not one: HTML/JS/CSS aren't content-hashed (same file
       # name on every deploy), so without an explicit Cache-Control they
       # fall back to CloudFront's/the browser's own heuristic caching —
@@ -21,15 +32,16 @@ jobs:
       # fonts, etc.) keeps the default behavior, since those just get new
       # filenames when they change.
       - name: Deploy frontend to public S3 (everything except HTML/JS/CSS)
-        uses: jakejarvis/s3-sync-action@v0.5.1
-        with:
-          args: --delete --exclude ".env" --exclude ".env.*" --exclude "*.html" --exclude "*.js" --exclude "*.css"
         env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-          SOURCE_DIR: ./front-end
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          aws s3 sync ./front-end "s3://$AWS_S3_BUCKET" \
+            --delete \
+            --exclude ".env" --exclude ".env.*" \
+            --exclude "*.html" --exclude "*.js" --exclude "*.css"
 
       # --exclude "*" then --include "<pattern>" is the standard aws s3 sync
       # idiom for "only these file types" — filters are evaluated in order
@@ -44,15 +56,17 @@ jobs:
       # non-HTML/JS/CSS files), stale objects of every kind still get
       # cleaned up between the two.
       - name: Deploy frontend HTML/JS/CSS to public S3 (no-cache)
-        uses: jakejarvis/s3-sync-action@v0.5.1
-        with:
-          args: --delete --exclude "*" --include "*.html" --include "*.js" --include "*.css" --exclude ".env" --exclude ".env.*" --cache-control "no-cache"
         env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-          SOURCE_DIR: ./front-end
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          aws s3 sync ./front-end "s3://$AWS_S3_BUCKET" \
+            --delete \
+            --exclude "*" --include "*.html" --include "*.js" --include "*.css" \
+            --exclude ".env" --exclude ".env.*" \
+            --cache-control "no-cache"
 
       - name: Invalidate CloudFront cache
         env:
