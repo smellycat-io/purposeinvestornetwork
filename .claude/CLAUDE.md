@@ -258,20 +258,31 @@ a timer or against the whole repo at once.
   (AWS CLI commands, env var names/values, URLs) — present it as a fenced code block
   rather than plain prose or GitHub-flavored markdown with inline bold/bullets. Prose
   formatting doesn't paste cleanly outside GitHub; a code block does.
-- **Flag when staging verification is needed.** Before calling a PR ready to merge,
-  explicitly call out whether this change needs manual testing on
-  staging.purposeinvestornetwork.org before it's trusted — new deploy config, a schema
-  or GSI change, anything CloudFront/Lambda-environment-specific that the test suite
-  can't exercise. State this plainly in the PR description (e.g. 'Needs a staging pass
-  before merging to main: <specific reason>') rather than assuming it's implied by the
-  change touching infra-adjacent code.
-- **The chat-facing report adds a mini summary and the original prompt — it doesn't
+- **Every PR description has a Stage Testing section.** A checklist, one GitHub task
+  item (`- [ ] ...`) per test, so Elise can tick them off while testing on
+  staging.purposeinvestornetwork.org.
+  - Each item names the account or role to use, the action, and the exact result to
+    expect. Example: `- [ ] Log in as a Chair: the tab bar shows Campaigns, Posts,
+    Content, Investments & Events, Settings, Users and no Press tab.`
+  - Order the items in the order to run them.
+  - If the change needs manual AWS work, the first items are the infra steps
+    (`- [ ] Applied the <command> to the stage <resource>`), with the exact commands
+    in a copy-paste block directly above the checklist.
+  - Include a negative check for anything that must not be possible (a Chair calling
+    an Admin-only route returns 403).
+  - If no staging pass is needed (docs or config only), the section says so in one
+    line with the reason, and has no checklist.
+  The PR description itself uses GitHub task-list markdown so the boxes render and can
+  be ticked. The chat-facing report stays a copy-paste code block and repeats the same
+  checklist.
+- **The chat-facing report adds a mini summary and a prompt identifier — it doesn't
   replace the PR's own full summary.** When wrapping up a task in the terminal/chat,
-  give a short summary of what shipped, then quote back the prompt/instructions this
-  work was built from, verbatim. Lets Elise confirm at a glance that the request and
-  the delivery match, without opening the PR. The PR description still gets its full
-  summary as already required above — this chat-facing mini summary is an addition
-  for quick confirmation, not a shorter replacement for it.
+  give a short summary of what shipped, then quote back the first few lines of the
+  prompt/instructions this work was built from — enough to identify it, not the whole
+  thing. Lets Elise confirm at a glance that the request and the delivery match,
+  without opening the PR. The PR description still gets its full summary as already
+  required above — this chat-facing mini summary is an addition for quick
+  confirmation, not a shorter replacement for it.
 - **Infra before deploy.** Any change that needs manual AWS work (new tables, GSIs,
   CloudFront behaviors, secrets) lists the exact commands in the PR description in a
   copy-paste block, and they are applied to an environment before that environment's
