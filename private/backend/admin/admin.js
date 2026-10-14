@@ -398,6 +398,7 @@
         if (btn.dataset.tab === 'content') loadContentTab();
         if (btn.dataset.tab === 'press') loadPressTab();
         if (btn.dataset.tab === 'investments-events') loadInvestmentsEventsTab();
+        if (btn.dataset.tab === 'settings') loadProfileTab();
         if (btn.dataset.tab === 'users') loadUsersTab();
       });
     });
@@ -1154,8 +1155,71 @@
   // --- Settings ---
   //
   // Notification email used to live here, but it's per-campaign now (see
-  // the Campaigns tab's "Results emails" field) — this tab is just Change
-  // Password.
+  // the Campaigns tab's "Results emails" field). The tab is now My Profile
+  // plus Change Password — Member profile editing stays out of scope here;
+  // a Member never reaches this dashboard at all (see `GET /member`).
+
+  // The bootstrap ADMIN_USER/ADMIN_PASS session has no Users-table record
+  // (GET /api/users/me returns { role, bootstrap: true }, no profile
+  // fields at all) — shown a one-line explanation instead of a form with
+  // nothing to prefill and nowhere to save to.
+  function renderProfileReadonlyContext() {
+    const me = state.me;
+    const el = document.getElementById('profile-readonly-context');
+    if (!el || !me || me.bootstrap) return;
+    const lines = [`${escapeHtml(me.email)} — your email is your login and can't be changed here.`];
+    lines.push(`Level: ${isChairSession() ? 'Chair' : 'Admin'}`);
+    if (isChairSession()) {
+      const roundtable = state.roundtables.find((rt) => rt.id === me.roundtableId);
+      lines.push(`Roundtable: ${escapeHtml(roundtable ? roundtable.name : 'none')}`);
+    }
+    el.innerHTML = lines.join('<br>');
+  }
+
+  function populateProfileForm() {
+    const me = state.me;
+    document.getElementById('profile-first-name').value = me.firstName || '';
+    document.getElementById('profile-last-name').value = me.lastName || '';
+    document.getElementById('profile-phone').value = me.phone || '';
+    document.getElementById('profile-address').value = me.address || '';
+  }
+
+  async function loadProfileTab() {
+    await loadCurrentUser();
+    const me = state.me;
+    if (!me) return; // profile-load-error already replaced the whole dashboard
+
+    const isBootstrap = !!me.bootstrap;
+    document.getElementById('profile-form').classList.toggle('hidden', isBootstrap);
+    document.getElementById('profile-readonly-context').classList.toggle('hidden', isBootstrap);
+    document.getElementById('profile-bootstrap-note').classList.toggle('hidden', !isBootstrap);
+    if (isBootstrap) return;
+
+    renderProfileReadonlyContext();
+    populateProfileForm();
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    const btn = document.getElementById('profile-save-btn');
+    btn.disabled = true;
+    try {
+      const payload = {
+        firstName: document.getElementById('profile-first-name').value.trim(),
+        lastName: document.getElementById('profile-last-name').value.trim(),
+        phone: document.getElementById('profile-phone').value.trim() || null,
+        address: document.getElementById('profile-address').value.trim() || null,
+      };
+      const result = await api('/api/users/me', { method: 'PATCH', body: JSON.stringify(payload) });
+      state.me = result.user;
+      showToast('Profile updated.');
+      populateProfileForm();
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
 
   async function savePassword(event) {
     event.preventDefault();
@@ -1179,6 +1243,7 @@
   }
 
   function initSettingsTab() {
+    document.getElementById('profile-form').addEventListener('submit', saveProfile);
     document.getElementById('password-form').addEventListener('submit', savePassword);
   }
 
