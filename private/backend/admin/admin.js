@@ -41,13 +41,29 @@
     showToast._t = setTimeout(() => { toast.className = 'toast hidden'; }, 3500);
   }
 
+  // Every route this dashboard calls returns a JSON { error } body on
+  // failure — but not every *status code* the browser can see necessarily
+  // comes from one of those routes (a CloudFront/API Gateway-level
+  // rejection, a proxy error page, a body too large for body-parser to
+  // even construct a response for). This is the fallback for exactly that
+  // case: no JSON body to read an `error` out of, so map the bare status
+  // to something more useful than "Request failed (502)".
+  const STATUS_FALLBACK_MESSAGES = {
+    401: 'Your session expired. Log in again.',
+    403: "You don't have permission to do that.",
+    413: 'That file is too large to upload.',
+    502: 'The server is temporarily unavailable. Try again in a minute.',
+    503: 'The server is temporarily unavailable. Try again in a minute.',
+    504: 'The server is temporarily unavailable. Try again in a minute.',
+  };
+
   async function api(path, options) {
     const response = await fetch(path, Object.assign({
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
     }, options));
     if (!response.ok) {
-      let message = 'Request failed (' + response.status + ')';
+      let message = STATUS_FALLBACK_MESSAGES[response.status] || ('Request failed (' + response.status + ')');
       try {
         const body = await response.json();
         if (body && body.error) message = body.error;
@@ -56,7 +72,7 @@
         // behind an unexpected 500, folded into the toast so "unable to
         // X" isn't the whole story.
         if (body && body.detail) message += ': ' + body.detail;
-      } catch (_) { /* ignore */ }
+      } catch (_) { /* no JSON body — keep the status-mapped fallback above */ }
       throw new Error(message);
     }
     if (response.status === 204) return null;
@@ -186,8 +202,12 @@
   }
 
   async function uploadImage(file) {
+    if (!file.type || !file.type.startsWith('image/')) {
+      throw new Error('Only image files can be uploaded.');
+    }
     if (file.size > MAX_IMAGE_BYTES) {
-      throw new Error('Image is too large. Please use a file under 3.5MB.');
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      throw new Error(`${file.name} is ${sizeMb} MB; the limit is 3.5 MB.`);
     }
     const dataBase64 = await readFileAsBase64(file);
     const result = await api('/api/admin/uploads', {

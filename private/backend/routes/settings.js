@@ -34,7 +34,7 @@ router.put(
     }
     captureMessage('Admin password updated successfully.', 'info');
     res.json({ success: true });
-  }, 'Unable to update password.')
+  }, 'Unable to update password.', { verbose: true })
 );
 
 module.exports = router;

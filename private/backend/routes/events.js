@@ -37,7 +37,7 @@ router.get(
   requireRole('admin'),
   asyncRoute(async (req, res) => {
     res.json(await content.listEvents());
-  }, 'Unable to load events.')
+  }, 'Unable to load events.', { verbose: true })
 );
 
 router.post(
@@ -48,7 +48,7 @@ router.post(
     const event = await content.createEvent(payload);
     captureMessage(`Event created — id: ${event.id}, title: "${event.title}"`, 'info');
     res.status(201).json(event);
-  }, 'Unable to create event.')
+  }, 'Unable to create event.', { verbose: true })
 );
 
 router.put(
@@ -64,7 +64,7 @@ router.put(
     }
     captureMessage(`Event updated — id: ${event.id}, title: "${event.title}"`, 'info');
     res.json(event);
-  }, 'Unable to update event.')
+  }, 'Unable to update event.', { verbose: true })
 );
 
 router.delete(
@@ -74,7 +74,7 @@ router.delete(
     await content.deleteEvent(req.params.id);
     captureMessage(`Event deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete event.')
+  }, 'Unable to delete event.', { verbose: true })
 );
 
 module.exports = router;

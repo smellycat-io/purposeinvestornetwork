@@ -50,7 +50,7 @@ router.post(
     const image = await content.createImage({ url, filename, contentType, size: buffer.length });
     captureMessage(`Image uploaded — id: ${image.id}, filename: "${image.filename}"`, 'info');
     res.status(201).json(image);
-  }, 'Unable to upload image.')
+  }, 'Unable to upload image.', { verbose: true })
 );
 
 router.get(
@@ -58,7 +58,7 @@ router.get(
   requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
     res.json(await content.listImages());
-  }, 'Unable to load images.')
+  }, 'Unable to load images.', { verbose: true })
 );
 
 router.get(
@@ -79,7 +79,7 @@ router.get(
         filename: obj.Key.split('/').pop(),
       }));
     res.json(images);
-  }, 'Unable to load stock images.')
+  }, 'Unable to load stock images.', { verbose: true })
 );
 
 module.exports = router;

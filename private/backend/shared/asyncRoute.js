@@ -13,7 +13,7 @@
 const { captureException } = require('@sentry/aws-serverless');
 
 function asyncRoute(handler, errorMessage, { verbose = false } = {}) {
-  return async (req, res) => {
+  const wrapped = async (req, res) => {
     try {
       await handler(req, res);
     } catch (error) {
@@ -23,6 +23,14 @@ function asyncRoute(handler, errorMessage, { verbose = false } = {}) {
       res.status(500).json(body);
     }
   };
+  // Marks the returned closure the same way shared/auth.js's requireRole
+  // marks its own guard (`isRoleGate`) — lets
+  // shared/routeRoleGates.test.js walk the live router and fail the build
+  // if a public route (no requireRole in its chain) is ever given
+  // `verbose: true`, rather than relying on every future route author to
+  // remember the "never on a public route" rule above by hand.
+  wrapped.isVerboseRoute = verbose;
+  return wrapped;
 }
 
 module.exports = { asyncRoute };

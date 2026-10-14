@@ -85,7 +85,7 @@ router.get(
       return res.json(all.filter((i) => roundtableArrayContains(i.roundtableIds, req.session.roundtableId)));
     }
     res.json(all);
-  }, 'Unable to load initiatives.')
+  }, 'Unable to load initiatives.', { verbose: true })
 );
 
 // Create: there's no existing item to check scope against yet, so a Chair
@@ -103,7 +103,7 @@ router.post(
     await campaignsDb.ensureInitiativeCampaign(initiative.id, initiative.title, req.session.userId || null);
     captureMessage(`Initiative created — id: ${initiative.id}, title: "${initiative.title}"`, 'info');
     res.status(201).json(initiative);
-  }, 'Unable to create initiative.')
+  }, 'Unable to create initiative.', { verbose: true })
 );
 
 // Edit: authorized against the *existing* item's current roundtableIds,
@@ -147,7 +147,7 @@ router.put(
     const initiative = await content.updateInitiative(req.params.id, req.body);
     captureMessage(`Initiative updated — id: ${initiative.id}, title: "${initiative.title}"`, 'info');
     res.json(initiative);
-  }, 'Unable to update initiative.')
+  }, 'Unable to update initiative.', { verbose: true })
 );
 
 router.delete(
@@ -165,7 +165,7 @@ router.delete(
     await campaignsDb.archiveCampaign(campaignsDb.initiativeCampaignId(req.params.id));
     captureMessage(`Initiative deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete initiative.')
+  }, 'Unable to delete initiative.', { verbose: true })
 );
 
 module.exports = router;

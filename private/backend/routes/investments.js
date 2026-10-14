@@ -46,7 +46,7 @@ router.get(
       return res.json(all.filter((i) => roundtableArrayContains(i.roundtableIds, req.session.roundtableId)));
     }
     res.json(all);
-  }, 'Unable to load investments.')
+  }, 'Unable to load investments.', { verbose: true })
 );
 
 // Same create/edit/delete scoping shape as routes/initiatives.js — see its
@@ -68,7 +68,7 @@ router.post(
     const investment = await content.createInvestment(payload);
     captureMessage(`Investment created — id: ${investment.id}, title: "${investment.title}"`, 'info');
     res.status(201).json(investment);
-  }, 'Unable to create investment.')
+  }, 'Unable to create investment.', { verbose: true })
 );
 
 router.put(
@@ -106,7 +106,7 @@ router.put(
     const investment = await content.updateInvestment(req.params.id, updates);
     captureMessage(`Investment updated — id: ${investment.id}, title: "${investment.title}"`, 'info');
     res.json(investment);
-  }, 'Unable to update investment.')
+  }, 'Unable to update investment.', { verbose: true })
 );
 
 router.delete(
@@ -123,7 +123,7 @@ router.delete(
     await content.deleteInvestment(req.params.id);
     captureMessage(`Investment deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete investment.')
+  }, 'Unable to delete investment.', { verbose: true })
 );
 
 module.exports = router;

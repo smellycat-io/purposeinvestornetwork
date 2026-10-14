@@ -66,4 +66,9 @@ describe('asyncRoute', () => {
       detail: 'ValidationException: index does not exist',
     });
   });
+
+  test('marks the returned handler with isVerboseRoute, for shared/routeRoleGates.test.js to recognize', () => {
+    expect(asyncRoute(async () => {}, 'x').isVerboseRoute).toBe(false);
+    expect(asyncRoute(async () => {}, 'x', { verbose: true }).isVerboseRoute).toBe(true);
+  });
 });

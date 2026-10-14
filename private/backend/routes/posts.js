@@ -105,7 +105,7 @@ router.get(
         .map((i) => i.id)
     );
     res.json(all.filter((p) => p.type === 'update' && inScopeInitiativeIds.has(p.initiativeId)));
-  }, 'Unable to load posts.')
+  }, 'Unable to load posts.', { verbose: true })
 );
 
 // Create: there's no existing Post to check scope against yet, so a Chair
@@ -125,7 +125,7 @@ router.post(
     const post = await content.createPost(payload);
     captureMessage(`Post created — id: ${post.id}, type: ${post.type}, title: "${post.title}"`, 'info');
     res.status(201).json(post);
-  }, 'Unable to create post.')
+  }, 'Unable to create post.', { verbose: true })
 );
 
 // Edit: authorized against the *existing* Post's current type/initiativeId,
@@ -166,7 +166,7 @@ router.put(
     const post = await content.updatePost(req.params.id, updates);
     captureMessage(`Post updated — id: ${post.id}, type: ${post.type}, title: "${post.title}"`, 'info');
     res.json(post);
-  }, 'Unable to update post.')
+  }, 'Unable to update post.', { verbose: true })
 );
 
 router.delete(
@@ -183,7 +183,7 @@ router.delete(
     await content.deletePost(req.params.id);
     captureMessage(`Post deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete post.')
+  }, 'Unable to delete post.', { verbose: true })
 );
 
 module.exports = router;
