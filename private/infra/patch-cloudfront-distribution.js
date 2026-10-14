@@ -67,56 +67,10 @@ const OBSOLETE_PATH_PATTERNS = [
   '/updates/*',
 ];
 
-const [, , configPath, apiDomain, functionArn] = process.argv;
-
-if (!configPath || !apiDomain) {
-  console.error('Usage: node patch-cloudfront-distribution.js <dist-config.json> <api-domain> [function-arn]');
-  process.exit(1);
-}
-
-if (apiDomain.includes('://')) {
-  console.error('apiDomain should be a bare hostname (no https://). Got:', apiDomain);
-  process.exit(1);
-}
-
-const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-
-// AWS's API omits the "Items" key entirely when Quantity is 0, rather than
-// returning an empty array — normalize that so the rest of this script
-// doesn't have to special-case it.
-if (!config.Origins.Items) config.Origins.Items = [];
-if (!config.CacheBehaviors) config.CacheBehaviors = { Quantity: 0 };
-if (!config.CacheBehaviors.Items) config.CacheBehaviors.Items = [];
-
-// Add the API origin if it's not already there (safe to re-run)
-const hasApiOrigin = config.Origins.Items.some((o) => o.Id === API_ORIGIN_ID);
-if (!hasApiOrigin) {
-  config.Origins.Items.push({
-    Id: API_ORIGIN_ID,
-    DomainName: apiDomain,
-    OriginPath: '',
-    CustomHeaders: { Quantity: 0 },
-    CustomOriginConfig: {
-      HTTPPort: 80,
-      HTTPSPort: 443,
-      OriginProtocolPolicy: 'https-only',
-      OriginSslProtocols: { Quantity: 1, Items: ['TLSv1.2'] },
-      OriginReadTimeout: 30,
-      OriginKeepaliveTimeout: 5,
-    },
-    ConnectionAttempts: 3,
-    ConnectionTimeout: 10,
-    OriginShield: { Enabled: false },
-  });
-  config.Origins.Quantity = config.Origins.Items.length;
-} else {
-  console.error(`Note: origin "${API_ORIGIN_ID}" already present, leaving Origins unchanged.`);
-}
-
-function makeBackendBehavior(pathPattern) {
+function makeBackendBehavior(pathPattern, targetOriginId) {
   return {
     PathPattern: pathPattern,
-    TargetOriginId: API_ORIGIN_ID,
+    TargetOriginId: targetOriginId,
     ViewerProtocolPolicy: 'redirect-to-https',
     AllowedMethods: {
       Quantity: 7,
@@ -135,32 +89,99 @@ function makeBackendBehavior(pathPattern) {
   };
 }
 
-const beforeCount = config.CacheBehaviors.Items.length;
-config.CacheBehaviors.Items = config.CacheBehaviors.Items.filter(
-  (b) => !OBSOLETE_PATH_PATTERNS.includes(b.PathPattern)
-);
-const removedCount = beforeCount - config.CacheBehaviors.Items.length;
-if (removedCount > 0) {
-  console.error(`Removed ${removedCount} obsolete cache behavior(s) for now-static content paths.`);
-}
+// Mutates and returns `config` in place — pulled out of the CLI script body
+// so private/infra/patch-cloudfront-distribution.test.js can exercise it
+// directly against fixture configs, instead of only against whatever's
+// live whenever someone happens to run this by hand.
+function patchConfig(config, apiDomain, functionArn) {
+  // AWS's API omits the "Items" key entirely when Quantity is 0, rather than
+  // returning an empty array — normalize that so the rest of this function
+  // doesn't have to special-case it.
+  if (!config.Origins.Items) config.Origins.Items = [];
+  if (!config.CacheBehaviors) config.CacheBehaviors = { Quantity: 0 };
+  if (!config.CacheBehaviors.Items) config.CacheBehaviors.Items = [];
 
-const existingPatterns = new Set(config.CacheBehaviors.Items.map((b) => b.PathPattern));
-for (const pattern of BACKEND_PATH_PATTERNS) {
-  if (!existingPatterns.has(pattern)) {
-    config.CacheBehaviors.Items.push(makeBackendBehavior(pattern));
+  // Reuse an existing origin that already points at this API domain, by
+  // DomainName rather than a hardcoded Id — production's live origin is
+  // named "ApiBackendOrigin" (matching API_ORIGIN_ID below), but stage's is
+  // "ApiBackendOriginStage". Matching by Id alone silently missed that and
+  // added a second, redundant origin pointing at the same domain every time
+  // this script ran against stage. Every backend behavior below targets
+  // whichever Id this resolves to, so it always points at the one real
+  // origin, under whatever name it actually has in the environment it's
+  // patching.
+  const existingApiOrigin = config.Origins.Items.find((o) => o.DomainName === apiDomain);
+  const targetOriginId = existingApiOrigin ? existingApiOrigin.Id : API_ORIGIN_ID;
+  if (!existingApiOrigin) {
+    config.Origins.Items.push({
+      Id: API_ORIGIN_ID,
+      DomainName: apiDomain,
+      OriginPath: '',
+      CustomHeaders: { Quantity: 0 },
+      CustomOriginConfig: {
+        HTTPPort: 80,
+        HTTPSPort: 443,
+        OriginProtocolPolicy: 'https-only',
+        OriginSslProtocols: { Quantity: 1, Items: ['TLSv1.2'] },
+        OriginReadTimeout: 30,
+        OriginKeepaliveTimeout: 5,
+      },
+      ConnectionAttempts: 3,
+      ConnectionTimeout: 10,
+      OriginShield: { Enabled: false },
+    });
+    config.Origins.Quantity = config.Origins.Items.length;
   } else {
-    console.error(`Note: behavior for "${pattern}" already present, leaving it unchanged.`);
+    console.error(`Note: an origin already points at "${apiDomain}" (Id "${existingApiOrigin.Id}"), reusing it instead of adding a duplicate.`);
   }
-}
-config.CacheBehaviors.Quantity = config.CacheBehaviors.Items.length;
 
-if (functionArn) {
-  config.DefaultCacheBehavior.FunctionAssociations = {
-    Quantity: 1,
-    Items: [{ EventType: 'viewer-request', FunctionARN: functionArn }],
-  };
-} else {
-  console.error('Note: no function-arn given, leaving DefaultCacheBehavior.FunctionAssociations unchanged.');
+  const beforeCount = config.CacheBehaviors.Items.length;
+  config.CacheBehaviors.Items = config.CacheBehaviors.Items.filter(
+    (b) => !OBSOLETE_PATH_PATTERNS.includes(b.PathPattern)
+  );
+  const removedCount = beforeCount - config.CacheBehaviors.Items.length;
+  if (removedCount > 0) {
+    console.error(`Removed ${removedCount} obsolete cache behavior(s) for now-static content paths.`);
+  }
+
+  const existingPatterns = new Set(config.CacheBehaviors.Items.map((b) => b.PathPattern));
+  for (const pattern of BACKEND_PATH_PATTERNS) {
+    if (!existingPatterns.has(pattern)) {
+      config.CacheBehaviors.Items.push(makeBackendBehavior(pattern, targetOriginId));
+    } else {
+      console.error(`Note: behavior for "${pattern}" already present, leaving it unchanged.`);
+    }
+  }
+  config.CacheBehaviors.Quantity = config.CacheBehaviors.Items.length;
+
+  if (functionArn) {
+    config.DefaultCacheBehavior.FunctionAssociations = {
+      Quantity: 1,
+      Items: [{ EventType: 'viewer-request', FunctionARN: functionArn }],
+    };
+  } else {
+    console.error('Note: no function-arn given, leaving DefaultCacheBehavior.FunctionAssociations unchanged.');
+  }
+
+  return config;
 }
 
-process.stdout.write(JSON.stringify(config, null, 2));
+if (require.main === module) {
+  const [, , configPath, apiDomain, functionArn] = process.argv;
+
+  if (!configPath || !apiDomain) {
+    console.error('Usage: node patch-cloudfront-distribution.js <dist-config.json> <api-domain> [function-arn]');
+    process.exit(1);
+  }
+
+  if (apiDomain.includes('://')) {
+    console.error('apiDomain should be a bare hostname (no https://). Got:', apiDomain);
+    process.exit(1);
+  }
+
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  patchConfig(config, apiDomain, functionArn);
+  process.stdout.write(JSON.stringify(config, null, 2));
+}
+
+module.exports = { patchConfig, BACKEND_PATH_PATTERNS, OBSOLETE_PATH_PATTERNS, API_ORIGIN_ID };
