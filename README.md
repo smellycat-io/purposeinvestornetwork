@@ -51,9 +51,8 @@ that flow works out of the box.
 npm test
 ```
 
-Runs the Jest/Supertest suite — see `docs/ARCHITECTURE.md`'s Testing note in
-`.claude/CLAUDE.md`: the existing test file predates the DynamoDB-only backend and needs
-updating before it's a trustworthy regression check.
+Runs the Jest/Supertest suite — see `.claude/CLAUDE.md`'s Testing section for what to
+prioritize when adding to it.
 
 ## Deploying
 
@@ -75,15 +74,19 @@ Full conventions (branch naming, commit style, pre-merge checklist) in
 
 **Built**: public site content areas (Homepage, About, Roundtables/Initiatives,
 Education, Investments, Events, Press/Updates), admin dashboard CRUD for all of the
-above, staff invite/login/password-reset flow, production + staging environments,
-Sentry/Plausible/PostHog integration.
+above, production + staging environments, Sentry/Plausible/PostHog integration.
+Admin/Chair/Member role differentiation: role-aware invites (with resend and an
+Admin-triggered password reset), Chair-scoped Member management, Chair write access to
+their own Roundtable's Initiatives/Posts/Investments, and a role-aware admin dashboard
+Users tab. See `docs/DATA-MODEL.md`'s Role & Permission Model section for exactly how
+each role is scoped.
 
-**In progress**: Admin/Chair/Member role differentiation (currently every logged-in
-user is treated as a flat admin) and the Member-facing area. See `docs/DATA-MODEL.md`'s
-Role & Permission Model section for the design, and its Decisions & Open Questions
-section for what's still unresolved (Chair scoping on Investments, the empty-Roundtable
-member news default, Users-table scale).
+**In progress**: the Member-facing area (a Member currently lands on the same admin
+dashboard as an Admin or Chair, just with a restricted Users tab) and role-aware
+`memberOnly` content visibility. See `docs/DATA-MODEL.md`'s "Not yet implemented" list
+at the end of the Role & Permission Model section. Closing the remaining flat
+`requireAdmin` routes (Roundtables, Press, Events, Images, and the `GET` list/read
+endpoints on every resource) to role-aware access is also outstanding.
 
 **Known gaps**: `.env.example` doesn't list every env var the app actually reads (see
-Local development above) — needs updating alongside the role work. `server.test.js`
-predates the current backend and needs a rewrite.
+Local development above).

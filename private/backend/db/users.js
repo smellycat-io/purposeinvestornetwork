@@ -69,6 +69,9 @@ function normalizeEmail(email) {
 // token field. listUsers/updateUser both return through this so that stays
 // true by construction instead of by remembering to strip it at each call
 // site (same reasoning as listUsers's original passwordHash omission).
+// inviteExpiresAt/inviteSentAt are read off the raw token-tracking fields
+// but aren't secret themselves — they're what the admin dashboard uses to
+// show invite status (Pending vs. Expired) and when it was last sent.
 function toPublicUser(u) {
   return {
     id: u.id,
@@ -82,6 +85,8 @@ function toPublicUser(u) {
     roundtableId: u.roundtableId || null,
     roundtableIds: u.roundtableIds || [],
     createdAt: u.createdAt,
+    inviteExpiresAt: u.inviteTokenExpiresAt || null,
+    inviteSentAt: u.inviteSentAt || null,
   };
 }
 
@@ -128,6 +133,7 @@ async function listAllRaw() {
 // regardless of what a caller passes.
 async function createInvite(email, { role = 'admin', roundtableId = null, roundtableIds = [] } = {}) {
   const token = makeToken();
+  const now = new Date().toISOString();
   const item = {
     id: makeId(),
     email: normalizeEmail(email),
@@ -137,8 +143,30 @@ async function createInvite(email, { role = 'admin', roundtableId = null, roundt
     status: 'pending',
     inviteTokenHash: hashToken(token),
     inviteTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    inviteSentAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await getDocClient().send(new PutCommand({ TableName: USERS_TABLE, Item: item }));
+  return { user: item, token };
+}
+
+// Resend: pending users only. Issues a brand-new token/hash/expiry and
+// bumps inviteSentAt — the *old* link stops working the moment this runs,
+// since its hash is overwritten here, not merely superseded by a second
+// valid one.
+async function reissueInvite(id) {
+  const existing = await getUserById(id);
+  if (!existing || existing.status !== 'pending') return null;
+
+  const token = makeToken();
+  const now = new Date().toISOString();
+  const item = {
+    ...existing,
+    inviteTokenHash: hashToken(token),
+    inviteTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 days
+    inviteSentAt: now,
+    updatedAt: now,
   };
   await getDocClient().send(new PutCommand({ TableName: USERS_TABLE, Item: item }));
   return { user: item, token };
@@ -250,8 +278,10 @@ async function updateUser(id, fields) {
 module.exports = {
   listUsers,
   getUserById,
+  toPublicUser,
   findUserByEmail,
   createInvite,
+  reissueInvite,
   acceptInvite,
   createPasswordReset,
   resetPassword,

@@ -159,6 +159,57 @@ describe('acceptInvite', () => {
   });
 });
 
+describe('reissueInvite', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('issues a different token/expiry/inviteSentAt; the old token stops working and the new one works', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    ddbMock.on(PutCommand).resolves({});
+    const { user: pendingUser, token: oldToken } = await users.createInvite('invitee@example.com');
+
+    jest.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
+    ddbMock.on(GetCommand).resolves({ Item: pendingUser });
+    const reissued = await users.reissueInvite(pendingUser.id);
+
+    expect(reissued).not.toBeNull();
+    const { user: reissuedUser, token: newToken } = reissued;
+    expect(newToken).not.toBe(oldToken);
+    expect(reissuedUser.inviteTokenHash).toBe(sha256(newToken));
+    expect(reissuedUser.inviteTokenHash).not.toBe(sha256(oldToken));
+    expect(reissuedUser.inviteSentAt).toBe('2026-01-02T00:00:00.000Z');
+    expect(reissuedUser.inviteTokenExpiresAt).toBe('2026-01-09T00:00:00.000Z');
+    expect(reissuedUser.updatedAt).toBe('2026-01-02T00:00:00.000Z');
+    expect(reissuedUser.createdAt).toBe('2026-01-01T00:00:00.000Z'); // unchanged
+    expect(reissuedUser.email).toBe('invitee@example.com');
+
+    ddbMock.on(ScanCommand).resolves({ Items: [reissuedUser] });
+    const oldAttempt = await users.acceptInvite(oldToken, { firstName: 'A', lastName: 'B', password: 'x'.repeat(10) });
+    expect(oldAttempt).toEqual({ error: 'invalid_or_expired' });
+
+    const newAttempt = await users.acceptInvite(newToken, { firstName: 'A', lastName: 'B', password: 'x'.repeat(10) });
+    expect(newAttempt.error).toBeUndefined();
+    expect(newAttempt.user.status).toBe('active');
+  });
+
+  test('rejects (returns null, writes nothing) for a user who already accepted their invite', async () => {
+    ddbMock.on(GetCommand).resolves({ Item: { id: 'u1', status: 'active' } });
+
+    const result = await users.reissueInvite('u1');
+
+    expect(result).toBeNull();
+    expect(ddbMock.commandCalls(PutCommand)).toHaveLength(0);
+  });
+
+  test('returns null for a nonexistent user', async () => {
+    ddbMock.on(GetCommand).resolves({ Item: undefined });
+
+    expect(await users.reissueInvite('missing')).toBeNull();
+  });
+});
+
 describe('findUserByEmail', () => {
   test('queries the email-index GSI, normalizing the input to lowercase', async () => {
     const user = { id: 'u1', email: 'active@example.com', status: 'active' };
@@ -342,6 +393,60 @@ describe('updateUser', () => {
     expect(updated.phone).toBe('new');
     expect(updated.role).toBe('chair');
     expect(updated.roundtableId).toBe('rt-1'); // untouched — role wasn't part of this update
+  });
+});
+
+describe('toPublicUser', () => {
+  test('exposes exactly the expected keys, including invite tracking, and never a token hash or passwordHash', () => {
+    const raw = {
+      id: 'u1',
+      email: 'a@example.com',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      phone: '555-0100',
+      address: '123 Main St',
+      status: 'pending',
+      role: 'member',
+      roundtableId: null,
+      roundtableIds: ['rt-1'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      inviteTokenHash: 'secret-hash',
+      inviteTokenExpiresAt: '2026-01-08T00:00:00.000Z',
+      inviteSentAt: '2026-01-01T00:00:00.000Z',
+      resetTokenHash: 'another-secret',
+      resetTokenExpiresAt: null,
+      passwordHash: 'should-never-appear',
+    };
+
+    const result = users.toPublicUser(raw);
+
+    expect(result).toEqual({
+      id: 'u1',
+      email: 'a@example.com',
+      firstName: 'Jane',
+      lastName: 'Doe',
+      phone: '555-0100',
+      address: '123 Main St',
+      status: 'pending',
+      role: 'member',
+      roundtableId: null,
+      roundtableIds: ['rt-1'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      inviteExpiresAt: '2026-01-08T00:00:00.000Z',
+      inviteSentAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(Object.keys(result).sort()).toEqual([
+      'address', 'createdAt', 'email', 'firstName', 'id', 'inviteExpiresAt',
+      'inviteSentAt', 'lastName', 'phone', 'role', 'roundtableId', 'roundtableIds', 'status',
+    ].sort());
+  });
+
+  test('defaults inviteExpiresAt/inviteSentAt to null when absent (accounts created before invite tracking existed)', () => {
+    const result = users.toPublicUser({ id: 'u1', email: 'a@example.com', status: 'active', role: 'admin' });
+
+    expect(result.inviteExpiresAt).toBeNull();
+    expect(result.inviteSentAt).toBeNull();
   });
 });
 

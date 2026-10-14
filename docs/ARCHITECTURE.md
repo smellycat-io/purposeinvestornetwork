@@ -77,7 +77,11 @@ reporting are genuinely tested against real infrastructure, not stubbed.
 7. **Reconcile IAM policies** — DynamoDB (scan/query/get/put/delete on every content
    table) and SES (`SendEmail`/`SendRawEmail`) inline policies are (re-)applied via
    `put-role-policy` on *every* deploy, idempotently. This is the actual source of truth
-   for the Lambda's permissions — not any CloudFormation template (see below).
+   for the Lambda's permissions — not any CloudFormation template (see below). The
+   DynamoDB policy's `Resource` list includes each table's ARN *and* a `/index/*`
+   wildcard on it — a Query against a table's GSI (e.g. `db/users.js`'s `email-index`,
+   queried on every login and invite) is a distinct resource from the table itself for
+   IAM purposes and is denied without the index ARN, even with the table ARN granted.
 8. Poll `get-function` until `Configuration.State` is `Active`, then
    `update-function-code` — handles the eventual-consistency window right after Lambda
    creation.
@@ -168,17 +172,23 @@ No `.env` file is committed. Two layers manage configuration:
 Two variables are deliberately hardcoded in the workflow YAML instead of GitHub secrets,
 each after a real incident:
 
-- **`ADMIN_USER`** is the literal string `admin`. Once set to a real email, it silently
-  shadowed `ADMIN_PASS` as the login check for that address — a lockout. It must never
-  be set to an address that could match a real Users-table account.
+- **`ADMIN_USER`** is the literal string `admin` on production. Once set to a real
+  email, it silently shadowed `ADMIN_PASS` as the login check for that address — a
+  lockout. It must never be set to an address that could match a real Users-table
+  account, and the deploy script enforces that. Staging differs: `ADMIN_USER_STAGE`,
+  if set, overrides the `admin` fallback (see `private/infra/STAGE-SETUP.md`) — and
+  stage's deploy script deliberately does **not** reject an email there, accepting
+  the same residual risk on the lower-stakes staging environment that production's
+  check exists to avoid. An explicit choice, not an inconsistency.
 - **`SENTRY_DSN`** is hardcoded directly. A DSN is write-only/ingest-only (worst-case
   exposure is spam events, not data access), and its value repeatedly got corrupted
   through the GitHub Secrets web UI (once literally became the string `"SENTRY_DSN"`).
   Get the current value from Sentry project settings if it ever needs to change.
 
-The deploy script validates both before applying — a regex check on `SENTRY_DSN`'s
-shape and a check that `ADMIN_USER` is non-empty and contains no `@` — and fails the
-deploy loudly rather than silently shipping a value that looks like either past mistake.
+Both deploy scripts validate `SENTRY_DSN`'s shape and that `ADMIN_USER` is non-empty,
+failing loudly rather than silently shipping a value that looks like the `SENTRY_DSN`
+past mistake. Only production's script additionally rejects an `ADMIN_USER` containing
+`@` — stage's does not (see above).
 
 Full current env var list (production Lambda): `ADMIN_USER`, `ADMIN_PASS`,
 `SESSION_SECRET`, `SENTRY_DSN`, `SENTRY_BROWSER_DSN`, `SENTRY_ENVIRONMENT`,
@@ -211,3 +221,12 @@ one `AWS_<THING>_TABLE` per table (see `docs/DATA-MODEL.md`), `SITE_URL`,
 - Whether the CloudFront distribution's *live* behavior configuration actually matches
   `cloudfront-static-routing.js` as checked into the repo — function code and the live
   distribution's attached-function config can drift if one is updated without the other.
+- **`purpose-investor-network-backend-role` (production) has the AWS-managed
+  `AdministratorAccess` policy attached**, alongside the narrower inline policies this
+  file documents above — found while diagnosing a DynamoDB GSI permission gap:
+  production's login/invite flow kept working despite the same gap stage had, purely
+  because `AdministratorAccess` covers it regardless of what the inline policy grants.
+  The Lambda's actual production permissions are broader than the inline policies
+  alone would suggest; whether to tighten this (remove `AdministratorAccess` now that
+  the inline policy covers what's actually needed) is an open decision, not something
+  to change without confirming nothing else currently depends on the broader grant.
