@@ -23,7 +23,7 @@ router.get(
   requireRole('admin'),
   asyncRoute(async (req, res) => {
     res.json(await content.listPress());
-  }, 'Unable to load press mentions.')
+  }, 'Unable to load press mentions.', { verbose: true })
 );
 
 router.post(
@@ -33,7 +33,7 @@ router.post(
     const press = await content.createPress(req.body);
     captureMessage(`Press mention created — id: ${press.id}, title: "${press.title}"`, 'info');
     res.status(201).json(press);
-  }, 'Unable to create press mention.')
+  }, 'Unable to create press mention.', { verbose: true })
 );
 
 router.put(
@@ -47,7 +47,7 @@ router.put(
     }
     captureMessage(`Press mention updated — id: ${press.id}, title: "${press.title}"`, 'info');
     res.json(press);
-  }, 'Unable to update press mention.')
+  }, 'Unable to update press mention.', { verbose: true })
 );
 
 router.delete(
@@ -57,7 +57,7 @@ router.delete(
     await content.deletePress(req.params.id);
     captureMessage(`Press mention deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete press mention.')
+  }, 'Unable to delete press mention.', { verbose: true })
 );
 
 module.exports = router;

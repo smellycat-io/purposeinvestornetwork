@@ -13,16 +13,41 @@ jobs:
       - name: Merge shared assets into front-end for deployment
         run: cp -r shared/. front-end/
 
-      - name: Deploy frontend to stage S3
-        uses: jakejarvis/s3-sync-action@v0.5.1
-        with:
-          args: --delete --exclude ".env" --exclude ".env.*"
+      # Plain `aws s3 sync` via a real shell step, not jakejarvis/s3-sync-
+      # action — see deploy.yml's own copy of this comment for why: that
+      # action's Docker entrypoint doesn't preserve shell quoting, so the
+      # bare `--exclude "*"` below gets glob-expanded against the
+      # container's own working directory instead of being passed through
+      # literally (this broke on the very first deploy under the two-sync
+      # design, with "Unknown options: docs,front-end,..." — the actual
+      # top-level contents of the repo checkout).
+      #
+      # Two syncs, not one — HTML/JS/CSS aren't content-hashed, so they
+      # need an explicit Cache-Control; everything else keeps the default.
+      - name: Deploy frontend to stage S3 (everything except HTML/JS/CSS)
         env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_STAGE }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-          SOURCE_DIR: ./front-end
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_S3_BUCKET_STAGE: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+        run: |
+          aws s3 sync ./front-end "s3://$AWS_S3_BUCKET_STAGE" \
+            --delete \
+            --exclude ".env" --exclude ".env.*" \
+            --exclude "*.html" --exclude "*.js" --exclude "*.css"
+
+      - name: Deploy frontend HTML/JS/CSS to stage S3 (no-cache)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_S3_BUCKET_STAGE: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+        run: |
+          aws s3 sync ./front-end "s3://$AWS_S3_BUCKET_STAGE" \
+            --delete \
+            --exclude "*" --include "*.html" --include "*.js" --include "*.css" \
+            --exclude ".env" --exclude ".env.*" \
+            --cache-control "no-cache"
 
       - name: Invalidate stage CloudFront cache
         env:
@@ -121,6 +146,8 @@ jobs:
           AWS_SETTINGS_TABLE: purpose-investor-network-settings-stage
           AWS_SESSIONS_TABLE: purpose-investor-network-sessions-stage
           AWS_USERS_TABLE: purpose-investor-network-users-stage
+          AWS_CAMPAIGNS_TABLE: purpose-investor-network-campaigns-stage
+          AWS_CAMPAIGN_ENTRIES_TABLE: purpose-investor-network-campaign-entries-stage
           SITE_URL: https://staging.purposeinvestornetwork.org
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
@@ -153,7 +180,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'AWS_SETTINGS_TABLE', 'AWS_SESSIONS_TABLE', 'AWS_USERS_TABLE', 'SITE_URL', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'AWS_SETTINGS_TABLE', 'AWS_SESSIONS_TABLE', 'AWS_USERS_TABLE', 'AWS_CAMPAIGNS_TABLE', 'AWS_CAMPAIGN_ENTRIES_TABLE', 'SITE_URL', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -191,6 +218,8 @@ jobs:
               'AWS_SETTINGS_TABLE': env_values.get('AWS_SETTINGS_TABLE', current.get('AWS_SETTINGS_TABLE', '')),
               'AWS_SESSIONS_TABLE': env_values.get('AWS_SESSIONS_TABLE', current.get('AWS_SESSIONS_TABLE', '')),
               'AWS_USERS_TABLE': env_values.get('AWS_USERS_TABLE', current.get('AWS_USERS_TABLE', '')),
+              'AWS_CAMPAIGNS_TABLE': env_values.get('AWS_CAMPAIGNS_TABLE', current.get('AWS_CAMPAIGNS_TABLE', '')),
+              'AWS_CAMPAIGN_ENTRIES_TABLE': env_values.get('AWS_CAMPAIGN_ENTRIES_TABLE', current.get('AWS_CAMPAIGN_ENTRIES_TABLE', '')),
               'SITE_URL': env_values.get('SITE_URL', current.get('SITE_URL', '')),
               'NOTIFY_EMAIL': env_values.get('NOTIFY_EMAIL', current.get('NOTIFY_EMAIL', '')),
               'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
@@ -260,6 +289,8 @@ jobs:
               'purpose-investor-network-settings-stage',
               'purpose-investor-network-sessions-stage',
               'purpose-investor-network-users-stage',
+              'purpose-investor-network-campaigns-stage',
+              'purpose-investor-network-campaign-entries-stage',
           ]
           table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
           # DynamoDB treats a table's GSIs as resources distinct from the
@@ -318,6 +349,52 @@ jobs:
               '--policy-document', json.dumps(policy_document),
           ])
           print('SES access policy applied to stage Lambda role.')
+          PY
+
+      - name: Ensure stage Lambda role has S3 access
+        env:
+          AWS_S3_BUCKET_STAGE: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role-stage'
+          bucket = os.environ['AWS_S3_BUCKET_STAGE']
+
+          # Same shape as production's version (deploy.yml) — PutObject
+          # scoped to the two prefixes the backend actually writes to,
+          # ListBucket (bucket-level) for the stock-image listing. Replaces
+          # the "pin-stage-s3" policy applied by hand while diagnosing the
+          # missing grant; safe to delete that one once this step has run
+          # at least once.
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:PutObject',
+                      'Resource': [
+                          f'arn:aws:s3:::{bucket}/uploads/*',
+                          f'arn:aws:s3:::{bucket}/responses/*',
+                      ],
+                  },
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:ListBucket',
+                      'Resource': f'arn:aws:s3:::{bucket}',
+                  },
+              ],
+          }
+
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-s3-uploads-stage',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('S3 access policy applied to stage Lambda role.')
           PY
 
       - name: Update stage Lambda function code

@@ -36,6 +36,7 @@ app.use(require('./routes/survey-responses.js'));
 app.use(require('./routes/images.js'));
 app.use(require('./routes/analytics.js'));
 app.use(require('./routes/subscribers.js'));
+app.use(require('./routes/campaigns.js'));
 app.use(require('./routes/settings.js'));
 app.use(require('./routes/users.js'));
 app.use(require('./routes/system.js'));

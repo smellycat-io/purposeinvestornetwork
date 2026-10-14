@@ -1,8 +1,13 @@
-// Single-row app settings: the admin notification email override and the
-// admin password hash. Deliberately its own DynamoDB table rather than
+// Single-row app settings. `notifyEmail` is a legacy field now: nothing
+// writes it anymore (there's no admin UI for it — see routes/settings.js),
+// and getEffectiveNotifyEmail is only still called once, by
+// db/campaigns.js's ensureSiteWideCampaigns, to seed each site-wide
+// Campaign's resultsEmails the first time it's ever created. After that
+// one-time seed, notification recipients live on the Campaign rows
+// themselves, not here. Deliberately its own DynamoDB table rather than
 // content.js's scan-all tables or the local JSON store — this is one row,
-// not a collection, and (unlike a subscriber signup) losing a password
-// change to Lambda's ephemeral /tmp would actually lock the admin out.
+// not a collection, and losing a value here to Lambda's ephemeral /tmp
+// would be a worse failure mode than losing a typical subscriber signup.
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
 const config = require('../shared/config.js');
@@ -27,14 +32,6 @@ async function getSettings() {
   if (!SETTINGS_TABLE) return {};
   const result = await getDocClient().send(new GetCommand({ TableName: SETTINGS_TABLE, Key: { id: SETTINGS_ID } }));
   return result.Item || {};
-}
-
-async function updateNotifyEmail(email) {
-  if (!SETTINGS_TABLE) throw new Error('Settings table is not configured.');
-  const current = await getSettings();
-  const item = { ...current, id: SETTINGS_ID, notifyEmail: email, updatedAt: new Date().toISOString() };
-  await getDocClient().send(new PutCommand({ TableName: SETTINGS_TABLE, Item: item }));
-  return item;
 }
 
 async function updateAdminPassword(newPassword) {
@@ -70,7 +67,6 @@ async function getEffectiveNotifyEmail() {
 
 module.exports = {
   getSettings,
-  updateNotifyEmail,
   updateAdminPassword,
   verifyPassword,
   checkAdminPassword,

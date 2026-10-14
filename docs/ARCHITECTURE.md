@@ -24,7 +24,7 @@
 | CloudFront distribution | `E20BW0W9XR1KU3` |
 | Lambda function | `purpose-investor-network-backend-pin-backend` |
 | IAM role | `purpose-investor-network-backend-role` |
-| DynamoDB tables | `purpose-investor-network-{roundtables,initiatives,posts,images,press,investments,events,settings,sessions,users}` |
+| DynamoDB tables | `purpose-investor-network-{roundtables,initiatives,posts,images,press,investments,events,settings,sessions,users,campaigns,campaign-entries}` |
 
 ### Staging
 A fully parallel, non-public environment — every resource `-stage`-suffixed, no shared
@@ -55,7 +55,27 @@ reporting are genuinely tested against real infrastructure, not stubbed.
 
 **Frontend job:**
 1. Copy `shared/` into `front-end/`
-2. Sync `front-end/` to the environment's S3 bucket (`--delete`, excluding `.env*`)
+2. Sync `front-end/` to the environment's S3 bucket, as two separate `aws s3 sync`
+   passes (both `--delete`, both excluding `.env*`):
+   - Everything **except** `*.html`/`*.js`/`*.css` — images, fonts, and the like get no
+     explicit `Cache-Control`, the default S3/CloudFront behavior, since a new upload
+     always gets a new filename when its content changes.
+   - **Only** `*.html`/`*.js`/`*.css`, with `Cache-Control: no-cache`. These aren't
+     content-hashed — the same filename is reused across deploys — so without an
+     explicit header they fall back to CloudFront's/the browser's own heuristic
+     caching, which can leave a page opened before a deploy serving stale HTML
+     alongside a newly-deployed JS file indefinitely. `no-cache` doesn't disable
+     caching outright, it requires revalidation before reuse, which is what a
+     non-hashed filename needs.
+   - `aws s3 sync` only re-uploads an object whose size or modified time changed —
+     flipping this policy doesn't retroactively fix objects already sitting in the
+     bucket with no `Cache-Control` from a previous deploy. Confirm with
+     `aws s3api head-object` after the first deploy under the new workflow; if
+     `CacheControl` is still absent on an unchanged file, it needs a one-time,
+     metadata-only rewrite (`aws s3 cp` in place, `--metadata-directive REPLACE`,
+     explicit `--content-type` per extension — a same-bucket `cp` does not infer
+     content type from the key the way an upload does, so leaving it to guess
+     produces `binary/octet-stream` on every object).
 3. Invalidate the CloudFront distribution (`/*`)
 
 **Backend job:**
@@ -74,14 +94,25 @@ reporting are genuinely tested against real infrastructure, not stubbed.
 6. **Create Lambda if missing** — bootstraps the IAM role, attaches
    `AWSLambdaBasicExecutionRole`, sets initial env vars. Only runs the creation path if
    `get-function` fails; otherwise a no-op.
-7. **Reconcile IAM policies** — DynamoDB (scan/query/get/put/delete on every content
-   table) and SES (`SendEmail`/`SendRawEmail`) inline policies are (re-)applied via
+7. **Reconcile IAM policies** — three inline policies are (re-)applied via
    `put-role-policy` on *every* deploy, idempotently. This is the actual source of truth
-   for the Lambda's permissions — not any CloudFormation template (see below). The
-   DynamoDB policy's `Resource` list includes each table's ARN *and* a `/index/*`
-   wildcard on it — a Query against a table's GSI (e.g. `db/users.js`'s `email-index`,
-   queried on every login and invite) is a distinct resource from the table itself for
-   IAM purposes and is denied without the index ARN, even with the table ARN granted.
+   for the Lambda's permissions — not any CloudFormation template (see below).
+   - **DynamoDB** (`purpose-investor-network-content-tables[-stage]`) — scan/query/get/
+     put/delete on every content table. The `Resource` list includes each table's ARN
+     *and* a `/index/*` wildcard on it — a Query against a table's GSI (e.g.
+     `db/users.js`'s `email-index`, queried on every login and invite) is a distinct
+     resource from the table itself for IAM purposes and is denied without the index
+     ARN, even with the table ARN granted.
+   - **SES** (`purpose-investor-network-ses-notifications[-stage]`) — `SendEmail`/
+     `SendRawEmail`, unscoped (`Resource: '*'`) — sending is restricted to one verified
+     sender identity (`SES_FROM_EMAIL`) by SES itself, not by this policy.
+   - **S3** (`purpose-investor-network-s3-uploads[-stage]`) — `PutObject` scoped to the
+     two prefixes the backend actually writes to (`uploads/` for admin image uploads,
+     `responses/` for the survey-response JSON backup — see `routes/images.js` and
+     `routes/survey-responses.js`), plus bucket-level `ListBucket` for the stock-image
+     listing under `imgs/stock/`. Deliberately not the whole bucket, which also serves
+     the public front-end. On production this is additive, not load-bearing on its own
+     — see "Open / needs confirmation" below for why.
 8. Poll `get-function` until `Configuration.State` is `Active`, then
    `update-function-code` — handles the eventual-consistency window right after Lambda
    creation.
@@ -126,6 +157,29 @@ needed — both tables are `PAY_PER_REQUEST`, which GSIs inherit automatically. 
 backfill on an existing table is asynchronous (`Backfilling` in `describe-table` until
 done); on a table this small it's expected to finish before the next request, but this
 is the moment that assumption could someday stop holding.
+
+**Required before deploying Campaigns.** `AWS_CAMPAIGNS_TABLE`/`AWS_CAMPAIGN_ENTRIES_TABLE`
+(see `docs/DATA-MODEL.md`'s Campaigns/Campaign entries sections) must exist before code
+that reads or writes them is deployed — read paths return `[]`/`null` gracefully when a
+table var is unset, but every write path throws, and that includes the public interest
+form and the newsletter/waitlist signup forms, not just the admin Campaigns tab. On
+staging before the staging deploy, on production before the production deploy:
+
+```bash
+aws dynamodb create-table \
+  --table-name purpose-investor-network-campaigns \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+
+aws dynamodb create-table \
+  --table-name purpose-investor-network-campaign-entries \
+  --attribute-definitions AttributeName=campaignId,AttributeType=S AttributeName=email,AttributeType=S \
+  --key-schema AttributeName=campaignId,KeyType=HASH AttributeName=email,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST
+```
+
+Repeat with the `-stage` suffix for staging.
 
 Net effect: the real infrastructure state (Lambda config, IAM policies) lives in AWS,
 reconciled imperatively by the deploy workflows' inline scripts — there's no single
@@ -226,7 +280,11 @@ one `AWS_<THING>_TABLE` per table (see `docs/DATA-MODEL.md`), `SITE_URL`,
   file documents above — found while diagnosing a DynamoDB GSI permission gap:
   production's login/invite flow kept working despite the same gap stage had, purely
   because `AdministratorAccess` covers it regardless of what the inline policy grants.
-  The Lambda's actual production permissions are broader than the inline policies
-  alone would suggest; whether to tighten this (remove `AdministratorAccess` now that
-  the inline policy covers what's actually needed) is an open decision, not something
-  to change without confirming nothing else currently depends on the broader grant.
+  The same pattern showed up again diagnosing image uploads: stage's role had *no* S3
+  grant at all (uploads failed outright) while production's uploads worked silently off
+  `AdministratorAccess`, with no S3-specific inline policy on either role until the S3
+  policy above was added. The Lambda's actual production permissions are broader than
+  the inline policies alone would suggest; whether to tighten this (remove
+  `AdministratorAccess` now that the inline policies cover what's actually needed) is
+  an open decision, not something to change without confirming nothing else currently
+  depends on the broader grant.

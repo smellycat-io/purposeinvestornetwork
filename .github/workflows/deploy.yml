@@ -13,16 +13,60 @@ jobs:
       - name: Merge shared assets into front-end for deployment
         run: cp -r shared/. front-end/
 
-      - name: Deploy frontend to public S3
-        uses: jakejarvis/s3-sync-action@v0.5.1
-        with:
-          args: --delete --exclude ".env" --exclude ".env.*"
+      # Plain `aws s3 sync` via a real shell step, not jakejarvis/s3-sync-
+      # action — that action passes its `args` input through a Docker
+      # entrypoint that doesn't preserve shell quoting, so a bare `--exclude
+      # "*"` (needed below) gets glob-expanded against the container's own
+      # working directory instead of being passed through literally. Caught
+      # this the hard way: it broke the very first stage deploy under the
+      # two-sync design, failing with "Unknown options: docs,front-end,..."
+      # — the actual top-level contents of the repo checkout. A real `run:`
+      # step is executed directly by the runner's own shell, where quoting
+      # works the way it's written here.
+      #
+      # Two syncs, not one: HTML/JS/CSS aren't content-hashed (same file
+      # name on every deploy), so without an explicit Cache-Control they
+      # fall back to CloudFront's/the browser's own heuristic caching —
+      # exactly what let a page opened before a deploy keep serving its old
+      # HTML alongside newly-deployed JS after one. Everything else (images,
+      # fonts, etc.) keeps the default behavior, since those just get new
+      # filenames when they change.
+      - name: Deploy frontend to public S3 (everything except HTML/JS/CSS)
         env:
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-          SOURCE_DIR: ./front-end
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          aws s3 sync ./front-end "s3://$AWS_S3_BUCKET" \
+            --delete \
+            --exclude ".env" --exclude ".env.*" \
+            --exclude "*.html" --exclude "*.js" --exclude "*.css"
+
+      # --exclude "*" then --include "<pattern>" is the standard aws s3 sync
+      # idiom for "only these file types" — filters are evaluated in order
+      # given, last match wins, so the three --include flags re-admit HTML/
+      # JS/CSS after the blanket exclude; the trailing .env excludes are
+      # redundant in practice (no .env file matches those three patterns)
+      # but kept so the exclusion is explicit here too, not just inferred.
+      # --delete in *this* sync only ever removes stale HTML/JS/CSS objects
+      # — a file outside the --include set is invisible to this sync's
+      # --delete the same way it would be to any other --exclude — so
+      # paired with the first sync's own --delete (which only ever sees
+      # non-HTML/JS/CSS files), stale objects of every kind still get
+      # cleaned up between the two.
+      - name: Deploy frontend HTML/JS/CSS to public S3 (no-cache)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          aws s3 sync ./front-end "s3://$AWS_S3_BUCKET" \
+            --delete \
+            --exclude "*" --include "*.html" --include "*.js" --include "*.css" \
+            --exclude ".env" --exclude ".env.*" \
+            --cache-control "no-cache"
 
       - name: Invalidate CloudFront cache
         env:
@@ -124,6 +168,8 @@ jobs:
           AWS_SETTINGS_TABLE: purpose-investor-network-settings
           AWS_SESSIONS_TABLE: purpose-investor-network-sessions
           AWS_USERS_TABLE: purpose-investor-network-users
+          AWS_CAMPAIGNS_TABLE: purpose-investor-network-campaigns
+          AWS_CAMPAIGN_ENTRIES_TABLE: purpose-investor-network-campaign-entries
           SITE_URL: https://purposeinvestornetwork.org
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
@@ -156,7 +202,7 @@ jobs:
           else:
               print('No .env file found; using workflow values and existing Lambda configuration.')
 
-          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'AWS_SETTINGS_TABLE', 'AWS_SESSIONS_TABLE', 'AWS_USERS_TABLE', 'SITE_URL', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
+          for key in ('ADMIN_USER', 'ADMIN_PASS', 'SESSION_SECRET', 'SENTRY_DSN', 'SENTRY_BROWSER_DSN', 'SENTRY_ENVIRONMENT', 'SENTRY_RELEASE', 'SENTRY_TRACES_SAMPLE_RATE', 'AWS_S3_BUCKET', 'AWS_DYNAMODB_TABLE', 'AWS_ROUNDTABLES_TABLE', 'AWS_INITIATIVES_TABLE', 'AWS_POSTS_TABLE', 'AWS_IMAGES_TABLE', 'AWS_PRESS_TABLE', 'AWS_INVESTMENTS_TABLE', 'AWS_EVENTS_TABLE', 'AWS_SETTINGS_TABLE', 'AWS_SESSIONS_TABLE', 'AWS_USERS_TABLE', 'AWS_CAMPAIGNS_TABLE', 'AWS_CAMPAIGN_ENTRIES_TABLE', 'SITE_URL', 'NOTIFY_EMAIL', 'SES_FROM_EMAIL'):
               value = os.getenv(key)
               if value:
                   env_values[key] = value
@@ -194,6 +240,8 @@ jobs:
               'AWS_SETTINGS_TABLE': env_values.get('AWS_SETTINGS_TABLE', current.get('AWS_SETTINGS_TABLE', '')),
               'AWS_SESSIONS_TABLE': env_values.get('AWS_SESSIONS_TABLE', current.get('AWS_SESSIONS_TABLE', '')),
               'AWS_USERS_TABLE': env_values.get('AWS_USERS_TABLE', current.get('AWS_USERS_TABLE', '')),
+              'AWS_CAMPAIGNS_TABLE': env_values.get('AWS_CAMPAIGNS_TABLE', current.get('AWS_CAMPAIGNS_TABLE', '')),
+              'AWS_CAMPAIGN_ENTRIES_TABLE': env_values.get('AWS_CAMPAIGN_ENTRIES_TABLE', current.get('AWS_CAMPAIGN_ENTRIES_TABLE', '')),
               'SITE_URL': env_values.get('SITE_URL', current.get('SITE_URL', '')),
               'NOTIFY_EMAIL': env_values.get('NOTIFY_EMAIL', current.get('NOTIFY_EMAIL', '')),
               'SES_FROM_EMAIL': env_values.get('SES_FROM_EMAIL', current.get('SES_FROM_EMAIL', '')),
@@ -269,6 +317,8 @@ jobs:
           AWS_SETTINGS_TABLE: purpose-investor-network-settings
           AWS_SESSIONS_TABLE: purpose-investor-network-sessions
           AWS_USERS_TABLE: purpose-investor-network-users
+          AWS_CAMPAIGNS_TABLE: purpose-investor-network-campaigns
+          AWS_CAMPAIGN_ENTRIES_TABLE: purpose-investor-network-campaign-entries
           SITE_URL: https://purposeinvestornetwork.org
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           SES_FROM_EMAIL: ${{ secrets.SES_FROM_EMAIL }}
@@ -303,6 +353,8 @@ jobs:
               'AWS_SETTINGS_TABLE': os.getenv('AWS_SETTINGS_TABLE', ''),
               'AWS_SESSIONS_TABLE': os.getenv('AWS_SESSIONS_TABLE', ''),
               'AWS_USERS_TABLE': os.getenv('AWS_USERS_TABLE', ''),
+              'AWS_CAMPAIGNS_TABLE': os.getenv('AWS_CAMPAIGNS_TABLE', ''),
+              'AWS_CAMPAIGN_ENTRIES_TABLE': os.getenv('AWS_CAMPAIGN_ENTRIES_TABLE', ''),
               'SITE_URL': os.getenv('SITE_URL', ''),
               'NOTIFY_EMAIL': os.getenv('NOTIFY_EMAIL', ''),
               'SES_FROM_EMAIL': os.getenv('SES_FROM_EMAIL', ''),
@@ -382,6 +434,8 @@ jobs:
               'purpose-investor-network-settings',
               'purpose-investor-network-sessions',
               'purpose-investor-network-users',
+              'purpose-investor-network-campaigns',
+              'purpose-investor-network-campaign-entries',
           ]
           table_arns = [f'arn:aws:dynamodb:{region}:{account_id}:table/{t}' for t in tables]
           # DynamoDB treats a table's GSIs as resources distinct from the
@@ -451,6 +505,58 @@ jobs:
               '--policy-document', json.dumps(policy_document),
           ])
           print('SES access policy applied to Lambda role.')
+          PY
+
+      - name: Ensure Lambda role has S3 access
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role'
+          bucket = os.environ['AWS_S3_BUCKET']
+
+          # PutObject is scoped to the two prefixes the backend actually
+          # writes to (routes/images.js's admin uploads, routes/
+          # survey-responses.js's S3 copy of each survey response) — not
+          # the whole bucket, which also serves the public front-end.
+          # ListBucket is bucket-level (not an object action), needed for
+          # routes/images.js's stock-image listing under imgs/stock/.
+          # Production's Lambda role separately carries AdministratorAccess
+          # (a legacy grant — see docs/ARCHITECTURE.md), so it already has
+          # S3 access regardless of this policy; this makes that access
+          # explicit and correct on its own, the same reason the DynamoDB
+          # policy above exists alongside that same broad grant.
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:PutObject',
+                      'Resource': [
+                          f'arn:aws:s3:::{bucket}/uploads/*',
+                          f'arn:aws:s3:::{bucket}/responses/*',
+                      ],
+                  },
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:ListBucket',
+                      'Resource': f'arn:aws:s3:::{bucket}',
+                  },
+              ],
+          }
+
+          # put-role-policy is idempotent — creates or overwrites the named inline policy
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-s3-uploads',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('S3 access policy applied to Lambda role.')
           PY
 
       - name: Update Lambda Function Code

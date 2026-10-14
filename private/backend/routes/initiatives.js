@@ -3,8 +3,12 @@ const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
 const { requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
+const campaignsDb = require('../db/campaigns.js');
+const { notifyCampaign } = require('../shared/email.js');
 
 const router = Router();
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // A Chair has no authority over any Roundtable but their own — on create,
 // that means their submitted roundtableIds must be exactly their own
@@ -20,8 +24,52 @@ router.get(
     const initiative = await content.getInitiativeBySlug(req.params.slug);
     if (!initiative) return res.status(404).json({ error: 'Not found.' });
     const updates = await content.listPosts({ type: 'update', initiativeId: initiative.id });
-    res.json({ initiative, updates });
+    res.json({
+      initiative,
+      updates,
+      interest: { consentText: campaignsDb.composeConsentText(initiative.title) },
+    });
   }, 'Unable to load initiative.')
+);
+
+// Public, always-on interest capture — no requireRole. See
+// routes/roundtables.js's own version of this route for the honeypot
+// reasoning (identical here).
+router.post(
+  '/api/initiatives/:slug/interest',
+  asyncRoute(async (req, res) => {
+    const initiative = await content.getInitiativeBySlug(req.params.slug);
+    if (!initiative) return res.status(404).json({ error: 'Not found.' });
+
+    const body = req.body || {};
+    if (String(body.website || '').trim()) {
+      return res.status(201).json({ success: true });
+    }
+
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!email || !EMAIL_PATTERN.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+    const name = body.name ? String(body.name).trim().slice(0, 200) : null;
+    const message = body.message ? String(body.message).trim().slice(0, 500) : null;
+
+    await campaignsDb.ensureInitiativeCampaign(initiative.id, initiative.title, null);
+    const campaign = await campaignsDb.getCampaignById(campaignsDb.initiativeCampaignId(initiative.id));
+    const { isNew, consentText } = await campaignsDb.recordInterestEntry(campaign, {
+      email, name, message, consent: body.consent,
+    });
+
+    if (isNew && campaign.notifyOnEntry) {
+      await notifyCampaign(campaign, `New interest in ${campaign.name}`, [
+        `Email: ${email}`,
+        `Name: ${name || '(not provided)'}`,
+        `Message: ${message || '(not provided)'}`,
+        `Consent: ${body.consent ? 'yes' : 'no'}`,
+      ].join('\n'));
+    }
+
+    res.status(201).json({ success: true, consentText });
+  }, 'Unable to submit your interest right now.')
 );
 
 // Admin sees every Initiative; a Chair sees only ones whose roundtableIds
@@ -37,7 +85,7 @@ router.get(
       return res.json(all.filter((i) => roundtableArrayContains(i.roundtableIds, req.session.roundtableId)));
     }
     res.json(all);
-  }, 'Unable to load initiatives.')
+  }, 'Unable to load initiatives.', { verbose: true })
 );
 
 // Create: there's no existing item to check scope against yet, so a Chair
@@ -52,9 +100,10 @@ router.post(
       return res.status(403).json({ error: 'Not authorized to create an Initiative outside your Roundtable.' });
     }
     const initiative = await content.createInitiative(req.body);
+    await campaignsDb.ensureInitiativeCampaign(initiative.id, initiative.title, req.session.userId || null);
     captureMessage(`Initiative created — id: ${initiative.id}, title: "${initiative.title}"`, 'info');
     res.status(201).json(initiative);
-  }, 'Unable to create initiative.')
+  }, 'Unable to create initiative.', { verbose: true })
 );
 
 // Edit: authorized against the *existing* item's current roundtableIds,
@@ -98,7 +147,7 @@ router.put(
     const initiative = await content.updateInitiative(req.params.id, req.body);
     captureMessage(`Initiative updated — id: ${initiative.id}, title: "${initiative.title}"`, 'info');
     res.json(initiative);
-  }, 'Unable to update initiative.')
+  }, 'Unable to update initiative.', { verbose: true })
 );
 
 router.delete(
@@ -113,9 +162,10 @@ router.delete(
       }
     }
     await content.deleteInitiative(req.params.id);
+    await campaignsDb.archiveCampaign(campaignsDb.initiativeCampaignId(req.params.id));
     captureMessage(`Initiative deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete initiative.')
+  }, 'Unable to delete initiative.', { verbose: true })
 );
 
 module.exports = router;

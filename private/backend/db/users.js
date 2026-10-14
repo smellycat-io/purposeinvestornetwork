@@ -122,6 +122,20 @@ async function listAllRaw() {
   return result.Items || [];
 }
 
+// Scan-and-filter, same tradeoff as every other non-login lookup in this
+// file: a Chair roster is a handful of accounts, not thousands, so this
+// doesn't need the email-index GSI's Query treatment. Used by
+// db/campaigns.js's resolveResultsEmails to notify every active Chair of
+// their Roundtable's interest-form submissions, alongside the campaign's
+// owner.
+async function listChairsForRoundtable(roundtableId) {
+  if (!USERS_TABLE || !roundtableId) return [];
+  const items = await listAllRaw();
+  return items
+    .filter((u) => u.role === 'chair' && u.status === 'active' && u.roundtableId === roundtableId)
+    .map(toPublicUser);
+}
+
 // Creates a pending invite. Personal info is deliberately not set here —
 // the invitee fills it in themselves when they accept. `role` defaults to
 // 'admin' when omitted, matching every account created before roles
@@ -280,6 +294,7 @@ module.exports = {
   getUserById,
   toPublicUser,
   findUserByEmail,
+  listChairsForRoundtable,
   createInvite,
   reissueInvite,
   acceptInvite,
