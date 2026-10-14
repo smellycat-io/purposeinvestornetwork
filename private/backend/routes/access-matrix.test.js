@@ -1,17 +1,17 @@
-// Route-level tests for fix/close-requireadmin-gaps: the remaining flat
-// requireAdmin gates (Roundtables, Press, Events, Images, the /admin page
-// itself) migrated to the role-aware requireRole, each with whatever
-// Chair scoping actually makes sense for that resource (or none, where it
-// doesn't — see each route file's own comments for why). One consolidated
-// file rather than one per resource, since none of these four route files
-// had an existing test file to extend, and this is meant to be the
-// systematic "does every admin route reject the roles it should" check
-// future gap-closure work (e.g. Campaigns) can keep extending.
+// Route-level tests covering every /api/admin/* and /admin route's
+// requireRole gate, each with whatever Chair scoping actually makes sense
+// for that resource (or none, where it doesn't — see each route file's own
+// comments for why). One consolidated file rather than one per resource,
+// since most of these route files have no other existing test file to
+// extend, and this is meant to be the systematic "does every admin route
+// reject the roles it should" check future gap-closure work (e.g.
+// Campaigns) can keep extending.
 process.env.AWS_USERS_TABLE = 'test-users-table';
 process.env.AWS_ROUNDTABLES_TABLE = 'test-roundtables-table';
 process.env.AWS_PRESS_TABLE = 'test-press-table';
 process.env.AWS_EVENTS_TABLE = 'test-events-table';
 process.env.AWS_IMAGES_TABLE = 'test-images-table';
+process.env.AWS_SETTINGS_TABLE = 'test-settings-table';
 process.env.DB_FILE = ':memory:';
 
 jest.mock('../db/sessions.js', () => {
@@ -56,6 +56,7 @@ const db = {
   'test-press-table': [],
   'test-events-table': [],
   'test-images-table': [],
+  'test-settings-table': [],
 };
 
 function seedUsers(users) {
@@ -343,5 +344,119 @@ describe('GET /admin (dashboard page) — any logged-in role, no Member area yet
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/login');
+  });
+});
+
+describe('Survey responses & Subscribers — Admin and Chair, Member excluded', () => {
+  test.each([
+    ['/api/admin/survey-responses'],
+    ['/api/admin/subscribers'],
+  ])('GET %s — Admin and Chair OK, Member and logged-out rejected', async (path) => {
+    seedUsers(freshRoster());
+
+    const loggedOutRes = await request(app).get(path);
+    expect(loggedOutRes.status).toBe(401);
+    expect(loggedOutRes.body).toEqual({ error: 'Not logged in.' });
+
+    const memberAgent = await loginAs('member-a1@example.com');
+    const memberRes = await memberAgent.get(path);
+    expect(memberRes.status).toBe(403);
+    expect(memberRes.body).toEqual({ error: 'Not authorized.' });
+
+    const chairAgent = await loginAs('chair-a@example.com');
+    const chairRes = await chairAgent.get(path);
+    expect(chairRes.status).toBe(200);
+    expect(chairRes.body).toEqual([]);
+
+    const adminAgent = await loginAs('admin@example.com');
+    const adminRes = await adminAgent.get(path);
+    expect(adminRes.status).toBe(200);
+    expect(adminRes.body).toEqual([]);
+  });
+});
+
+describe('Settings — read and notify-email are Admin only', () => {
+  test.each([
+    ['get', '/api/admin/settings'],
+    ['put', '/api/admin/settings/notify-email'],
+  ])('%s %s — Admin OK, Chair/Member/logged-out rejected', async (method, path) => {
+    seedUsers(freshRoster());
+
+    const loggedOutRes = await request(app)[method](path);
+    expect(loggedOutRes.status).toBe(401);
+    expect(loggedOutRes.body).toEqual({ error: 'Not logged in.' });
+
+    const memberAgent = await loginAs('member-a1@example.com');
+    const memberRes = await memberAgent[method](path).send({ email: 'ops@example.com' });
+    expect(memberRes.status).toBe(403);
+    expect(memberRes.body).toEqual({ error: 'Not authorized.' });
+
+    const chairAgent = await loginAs('chair-a@example.com');
+    const chairRes = await chairAgent[method](path).send({ email: 'ops@example.com' });
+    expect(chairRes.status).toBe(403);
+    expect(chairRes.body).toEqual({ error: 'Not authorized.' });
+
+    const adminAgent = await loginAs('admin@example.com');
+    const adminRes = await adminAgent[method](path).send({ email: 'ops@example.com' });
+    expect(adminRes.status).toBe(200);
+  });
+
+  test('Admin can read and then update the notify email', async () => {
+    seedUsers(freshRoster());
+    db['test-settings-table'] = [];
+    const agent = await loginAs('admin@example.com');
+
+    const before = await agent.get('/api/admin/settings');
+    expect(before.status).toBe(200);
+    expect(before.body).toEqual({ notifyEmail: null });
+
+    const update = await agent.put('/api/admin/settings/notify-email').send({ email: 'ops@example.com' });
+    expect(update.status).toBe(200);
+    expect(update.body).toEqual({ success: true, notifyEmail: 'ops@example.com' });
+
+    const after = await agent.get('/api/admin/settings');
+    expect(after.status).toBe(200);
+    expect(after.body).toEqual({ notifyEmail: 'ops@example.com' });
+  });
+});
+
+describe('Settings — password change is open to every logged-in role', () => {
+  test('a logged-out request is rejected', async () => {
+    seedUsers(freshRoster());
+
+    const res = await request(app)
+      .put('/api/admin/settings/password')
+      .send({ currentPassword: PASSWORD, newPassword: 'a-new-password-1' });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Not logged in.' });
+  });
+
+  test.each([
+    ['admin@example.com'],
+    ['chair-a@example.com'],
+    ['member-a1@example.com'],
+  ])('%s can change their own password', async (email) => {
+    seedUsers(freshRoster());
+    const agent = await loginAs(email);
+
+    const res = await agent
+      .put('/api/admin/settings/password')
+      .send({ currentPassword: PASSWORD, newPassword: 'a-new-password-1' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+  });
+
+  test('rejects the wrong current password with 401, not the role gate', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent
+      .put('/api/admin/settings/password')
+      .send({ currentPassword: 'wrong-password', newPassword: 'a-new-password-1' });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Current password is incorrect.' });
   });
 });

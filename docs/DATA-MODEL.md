@@ -172,10 +172,9 @@ default in-memory session store would bounce an already-logged-in admin back to
 Every content and Users route under `/api/admin/*`, plus the `/admin` dashboard page
 and its static assets, uses the role-aware `requireRole` middleware — see Role &
 Permission Model below for exactly which roles reach which endpoint and how Chair
-access is scoped. `requireAdmin` (the flat `req.session.loggedIn` check, no role
-distinction) remains only on three routes outside this table's scope — `GET
-/api/admin/survey-responses`, `GET /api/admin/subscribers`, and the Settings
-notification-email route — pending their removal in favor of a Campaigns system.
+access is scoped. `shared/routeRoleGates.test.js` walks the live Express router and
+fails the build if any `/api/admin/*` or `/admin` route is ever added without a
+`requireRole` call.
 
 | Resource | Public | Admin / role-gated |
 |---|---|---|
@@ -187,6 +186,9 @@ notification-email route — pending their removal in favor of a Campaigns syste
 | Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` — Admin only, no Chair path |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` — Admin or Chair, unscoped (shared library, no per-item ownership) |
 | Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite`, `POST /api/admin/users/:id/resend-invite` — Admin or Chair, scoped per Role & Permission Model below; `POST /api/admin/users/:id/send-reset` — Admin only; `GET/PATCH /api/users/me` — any logged-in role |
+| Survey responses | `POST /api/survey` | `GET /api/admin/survey-responses` — Admin or Chair, unscoped |
+| Subscribers | `POST /api/subscribe` | `GET /api/admin/subscribers` — Admin or Chair, unscoped |
+| Settings | — | `GET /api/admin/settings`, `PUT /api/admin/settings/notify-email` — Admin only; `PUT /api/admin/settings/password` — any logged-in role (self-service password change) |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) — any logged-in role |
 
 ## Role & Permission Model
@@ -213,15 +215,12 @@ always treated as `admin`. Login always redirects to `/admin` regardless of role
 is no role-based redirect or role-aware UI in the admin dashboard today (see "Not yet
 implemented" below).
 
-**Auth middleware (`shared/auth.js`).** `requireAdmin` (the flat `req.session.loggedIn`
-check, no role distinction) remains only on the three routes noted in API Endpoints
-above, pending their removal; every other admin/content route uses the role-aware
+**Auth middleware (`shared/auth.js`).** Every admin/content route uses the role-aware
 `requireRole`:
-- `requireRole(...roles)` — checks `req.session.role` is one of the listed roles.
-  Unlike `requireAdmin` (which always redirects, even for `/api/*` callers),
-  `requireRole` returns JSON 401 (not logged in) or 403 (wrong role) for `/api/*`
-  routes and redirects to `/login` for page routes, since a role-gated `fetch()` call
-  needs a real error to branch on.
+- `requireRole(...roles)` — checks `req.session.role` is one of the listed roles, and
+  that a session exists at all. Returns JSON 401 (not logged in) or 403 (wrong role)
+  for `/api/*` routes, and redirects to `/login` for page routes, since a role-gated
+  `fetch()` call needs a real error to branch on.
 - `roundtableArrayContains(roundtableIds, chairRoundtableId)` — array-contains check (an
   item's `roundtableIds`, or a Member's, can include several Roundtables; a Chair
   matches if their one Roundtable is among them). Used by the Users routes below and by

@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { getEffectiveNotifyEmail, updateNotifyEmail } = require('../db/settings.js');
 const { updateOwnPassword } = require('../db/users.js');
@@ -11,7 +11,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 router.get(
   '/api/admin/settings',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     res.json({ notifyEmail: await getEffectiveNotifyEmail() });
   }, 'Unable to load settings.')
@@ -19,7 +19,7 @@ router.get(
 
 router.put(
   '/api/admin/settings/notify-email',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     const email = String((req.body || {}).email || '').trim().toLowerCase();
     if (!email || !EMAIL_PATTERN.test(email)) {
@@ -33,7 +33,7 @@ router.put(
 
 router.put(
   '/api/admin/settings/password',
-  requireAdmin,
+  requireRole('admin', 'chair', 'member'),
   asyncRoute(async (req, res) => {
     const { currentPassword, newPassword } = req.body || {};
     if (!newPassword || String(newPassword).length < 8) {

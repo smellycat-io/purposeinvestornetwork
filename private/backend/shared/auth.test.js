@@ -1,4 +1,4 @@
-const { requireAdmin, requireRole, matchesRoundtable, roundtableArrayContains } = require('./auth.js');
+const { requireRole, matchesRoundtable, roundtableArrayContains } = require('./auth.js');
 
 function mockRes() {
   const res = {};
@@ -8,31 +8,12 @@ function mockRes() {
   return res;
 }
 
-describe('requireAdmin', () => {
-  test('calls next when logged in', () => {
-    const req = { session: { loggedIn: true } };
-    const res = mockRes();
-    const next = jest.fn();
-
-    requireAdmin(req, res, next);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(res.redirect).not.toHaveBeenCalled();
-  });
-
-  test('redirects to /login when there is no session', () => {
-    const req = { session: null };
-    const res = mockRes();
-    const next = jest.fn();
-
-    requireAdmin(req, res, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith('/login');
-  });
-});
-
 describe('requireRole', () => {
+  test('the returned guard is marked isRoleGate, for shared/routeRoleGates.test.js to recognize', () => {
+    expect(requireRole('admin').isRoleGate).toBe(true);
+  });
+
+
   test('calls next when logged in with an allowed role', () => {
     const req = { session: { loggedIn: true, role: 'chair' }, path: '/api/admin/users/invite' };
     const res = mockRes();
