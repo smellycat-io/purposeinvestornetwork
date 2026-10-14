@@ -463,6 +463,58 @@ jobs:
           print('SES access policy applied to Lambda role.')
           PY
 
+      - name: Ensure Lambda role has S3 access
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role'
+          bucket = os.environ['AWS_S3_BUCKET']
+
+          # PutObject is scoped to the two prefixes the backend actually
+          # writes to (routes/images.js's admin uploads, routes/
+          # survey-responses.js's S3 copy of each survey response) — not
+          # the whole bucket, which also serves the public front-end.
+          # ListBucket is bucket-level (not an object action), needed for
+          # routes/images.js's stock-image listing under imgs/stock/.
+          # Production's Lambda role separately carries AdministratorAccess
+          # (a legacy grant — see docs/ARCHITECTURE.md), so it already has
+          # S3 access regardless of this policy; this makes that access
+          # explicit and correct on its own, the same reason the DynamoDB
+          # policy above exists alongside that same broad grant.
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:PutObject',
+                      'Resource': [
+                          f'arn:aws:s3:::{bucket}/uploads/*',
+                          f'arn:aws:s3:::{bucket}/responses/*',
+                      ],
+                  },
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:ListBucket',
+                      'Resource': f'arn:aws:s3:::{bucket}',
+                  },
+              ],
+          }
+
+          # put-role-policy is idempotent — creates or overwrites the named inline policy
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-s3-uploads',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('S3 access policy applied to Lambda role.')
+          PY
+
       - name: Update Lambda Function Code
         env:
           AWS_BACKEND_BUCKET: ${{ secrets.AWS_BACKEND_BUCKET }}

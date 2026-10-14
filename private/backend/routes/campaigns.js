@@ -60,7 +60,7 @@ router.get(
       visible.map(async (c) => ({ ...c, effectiveResultsEmails: await campaignsDb.resolveResultsEmails(c) }))
     );
     res.json(withEffective);
-  }, 'Unable to load campaigns.')
+  }, 'Unable to load campaigns.', { verbose: true })
 );
 
 router.get(
@@ -86,7 +86,7 @@ router.get(
       ? await campaignsDb.listLegacySurveyEntries()
       : await campaignsDb.listEntriesForCampaign(campaign.id);
     res.json({ campaign, entries });
-  }, 'Unable to load campaign entries.')
+  }, 'Unable to load campaign entries.', { verbose: true })
 );
 
 // Admin only — resultsEmails is an override of who gets notified
@@ -124,7 +124,7 @@ router.patch(
 
     const updated = await campaignsDb.updateCampaign(req.params.id, updates);
     res.json({ ...updated, effectiveResultsEmails: await campaignsDb.resolveResultsEmails(updated) });
-  }, 'Unable to update campaign.')
+  }, 'Unable to update campaign.', { verbose: true })
 );
 
 module.exports = router;

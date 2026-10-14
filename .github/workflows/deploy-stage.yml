@@ -326,6 +326,52 @@ jobs:
           print('SES access policy applied to stage Lambda role.')
           PY
 
+      - name: Ensure stage Lambda role has S3 access
+        env:
+          AWS_S3_BUCKET_STAGE: ${{ secrets.AWS_S3_BUCKET_STAGE }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          role_name = 'purpose-investor-network-backend-role-stage'
+          bucket = os.environ['AWS_S3_BUCKET_STAGE']
+
+          # Same shape as production's version (deploy.yml) — PutObject
+          # scoped to the two prefixes the backend actually writes to,
+          # ListBucket (bucket-level) for the stock-image listing. Replaces
+          # the "pin-stage-s3" policy applied by hand while diagnosing the
+          # missing grant; safe to delete that one once this step has run
+          # at least once.
+          policy_document = {
+              'Version': '2012-10-17',
+              'Statement': [
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:PutObject',
+                      'Resource': [
+                          f'arn:aws:s3:::{bucket}/uploads/*',
+                          f'arn:aws:s3:::{bucket}/responses/*',
+                      ],
+                  },
+                  {
+                      'Effect': 'Allow',
+                      'Action': 's3:ListBucket',
+                      'Resource': f'arn:aws:s3:::{bucket}',
+                  },
+              ],
+          }
+
+          subprocess.check_call([
+              'aws', 'iam', 'put-role-policy',
+              '--role-name', role_name,
+              '--policy-name', 'purpose-investor-network-s3-uploads-stage',
+              '--policy-document', json.dumps(policy_document),
+          ])
+          print('S3 access policy applied to stage Lambda role.')
+          PY
+
       - name: Update stage Lambda function code
         env:
           AWS_BACKEND_BUCKET_STAGE: ${{ secrets.AWS_BACKEND_BUCKET_STAGE }}

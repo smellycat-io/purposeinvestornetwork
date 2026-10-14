@@ -74,14 +74,25 @@ reporting are genuinely tested against real infrastructure, not stubbed.
 6. **Create Lambda if missing** — bootstraps the IAM role, attaches
    `AWSLambdaBasicExecutionRole`, sets initial env vars. Only runs the creation path if
    `get-function` fails; otherwise a no-op.
-7. **Reconcile IAM policies** — DynamoDB (scan/query/get/put/delete on every content
-   table) and SES (`SendEmail`/`SendRawEmail`) inline policies are (re-)applied via
+7. **Reconcile IAM policies** — three inline policies are (re-)applied via
    `put-role-policy` on *every* deploy, idempotently. This is the actual source of truth
-   for the Lambda's permissions — not any CloudFormation template (see below). The
-   DynamoDB policy's `Resource` list includes each table's ARN *and* a `/index/*`
-   wildcard on it — a Query against a table's GSI (e.g. `db/users.js`'s `email-index`,
-   queried on every login and invite) is a distinct resource from the table itself for
-   IAM purposes and is denied without the index ARN, even with the table ARN granted.
+   for the Lambda's permissions — not any CloudFormation template (see below).
+   - **DynamoDB** (`purpose-investor-network-content-tables[-stage]`) — scan/query/get/
+     put/delete on every content table. The `Resource` list includes each table's ARN
+     *and* a `/index/*` wildcard on it — a Query against a table's GSI (e.g.
+     `db/users.js`'s `email-index`, queried on every login and invite) is a distinct
+     resource from the table itself for IAM purposes and is denied without the index
+     ARN, even with the table ARN granted.
+   - **SES** (`purpose-investor-network-ses-notifications[-stage]`) — `SendEmail`/
+     `SendRawEmail`, unscoped (`Resource: '*'`) — sending is restricted to one verified
+     sender identity (`SES_FROM_EMAIL`) by SES itself, not by this policy.
+   - **S3** (`purpose-investor-network-s3-uploads[-stage]`) — `PutObject` scoped to the
+     two prefixes the backend actually writes to (`uploads/` for admin image uploads,
+     `responses/` for the survey-response JSON backup — see `routes/images.js` and
+     `routes/survey-responses.js`), plus bucket-level `ListBucket` for the stock-image
+     listing under `imgs/stock/`. Deliberately not the whole bucket, which also serves
+     the public front-end. On production this is additive, not load-bearing on its own
+     — see "Open / needs confirmation" below for why.
 8. Poll `get-function` until `Configuration.State` is `Active`, then
    `update-function-code` — handles the eventual-consistency window right after Lambda
    creation.
@@ -249,7 +260,11 @@ one `AWS_<THING>_TABLE` per table (see `docs/DATA-MODEL.md`), `SITE_URL`,
   file documents above — found while diagnosing a DynamoDB GSI permission gap:
   production's login/invite flow kept working despite the same gap stage had, purely
   because `AdministratorAccess` covers it regardless of what the inline policy grants.
-  The Lambda's actual production permissions are broader than the inline policies
-  alone would suggest; whether to tighten this (remove `AdministratorAccess` now that
-  the inline policy covers what's actually needed) is an open decision, not something
-  to change without confirming nothing else currently depends on the broader grant.
+  The same pattern showed up again diagnosing image uploads: stage's role had *no* S3
+  grant at all (uploads failed outright) while production's uploads worked silently off
+  `AdministratorAccess`, with no S3-specific inline policy on either role until the S3
+  policy above was added. The Lambda's actual production permissions are broader than
+  the inline policies alone would suggest; whether to tighten this (remove
+  `AdministratorAccess` now that the inline policies cover what's actually needed) is
+  an open decision, not something to change without confirming nothing else currently
+  depends on the broader grant.

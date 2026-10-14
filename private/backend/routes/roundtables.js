@@ -89,7 +89,7 @@ router.post(
     await campaignsDb.ensureRoundtableCampaign(roundtable.id, roundtable.name, req.session.userId || null);
     captureMessage(`Roundtable created — id: ${roundtable.id}, name: "${roundtable.name}"`, 'info');
     res.status(201).json(roundtable);
-  }, 'Unable to create roundtable.')
+  }, 'Unable to create roundtable.', { verbose: true })
 );
 
 // A Chair may edit only their own Roundtable's own fields (name,
@@ -114,7 +114,7 @@ router.put(
     }
     captureMessage(`Roundtable updated — id: ${roundtable.id}, name: "${roundtable.name}"`, 'info');
     res.json(roundtable);
-  }, 'Unable to update roundtable.')
+  }, 'Unable to update roundtable.', { verbose: true })
 );
 
 // Deleting a Roundtable entirely is a structural, organization-level
@@ -133,7 +133,7 @@ router.delete(
     await campaignsDb.archiveCampaign(campaignsDb.roundtableCampaignId(req.params.id));
     captureMessage(`Roundtable deleted — id: ${req.params.id}`, 'info');
     res.status(204).end();
-  }, 'Unable to delete roundtable.')
+  }, 'Unable to delete roundtable.', { verbose: true })
 );
 
 module.exports = router;

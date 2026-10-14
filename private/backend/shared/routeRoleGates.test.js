@@ -13,7 +13,8 @@ function collectRoutes(stack, routes, standaloneLayers) {
     if (layer.route) {
       const methods = Object.keys(layer.route.methods);
       const isGated = layer.route.stack.some((l) => l.handle && l.handle.isRoleGate);
-      routes.push({ path: layer.route.path, methods, isGated });
+      const isVerbose = layer.route.stack.some((l) => l.handle && l.handle.isVerboseRoute);
+      routes.push({ path: layer.route.path, methods, isGated, isVerbose });
     } else if (layer.handle && layer.handle.stack) {
       collectRoutes(layer.handle.stack, routes, standaloneLayers);
     } else {
@@ -53,4 +54,26 @@ describe('every /api/admin, /admin, and /member route carries a requireRole gate
     expect(matching.length).toBeGreaterThan(0);
     expect(matching.some((layer) => layer.handle && layer.handle.isRoleGate)).toBe(true);
   });
+});
+
+// asyncRoute's { verbose: true } option folds the raw error.message into a
+// 500 response as `detail` — fine behind a role gate (an authenticated
+// caller), a real risk on a public route (an unauthenticated caller could
+// use it to probe internals a generic message deliberately hides — see
+// shared/asyncRoute.js's own header comment). Every route in the app is in
+// scope here, not just /api/admin*/admin/member — a public route getting
+// `verbose: true` by mistake is exactly the bug this guards against.
+describe('no public route (no requireRole gate) is ever given verbose: true', () => {
+  const verboseRoutes = routes.filter((r) => r.isVerbose);
+
+  test('the walk actually found verbose routes (guards against the walk itself silently finding nothing)', () => {
+    expect(verboseRoutes.length).toBeGreaterThan(0);
+  });
+
+  test.each(verboseRoutes.map((r) => [r.methods.join(',').toUpperCase(), r.path, r.isGated]))(
+    '%s %s is role-gated, since it is verbose',
+    (methods, path, isGated) => {
+      expect(isGated).toBe(true);
+    }
+  );
 });
