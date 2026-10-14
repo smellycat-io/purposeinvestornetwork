@@ -55,7 +55,27 @@ reporting are genuinely tested against real infrastructure, not stubbed.
 
 **Frontend job:**
 1. Copy `shared/` into `front-end/`
-2. Sync `front-end/` to the environment's S3 bucket (`--delete`, excluding `.env*`)
+2. Sync `front-end/` to the environment's S3 bucket, as two separate `aws s3 sync`
+   passes (both `--delete`, both excluding `.env*`):
+   - Everything **except** `*.html`/`*.js`/`*.css` — images, fonts, and the like get no
+     explicit `Cache-Control`, the default S3/CloudFront behavior, since a new upload
+     always gets a new filename when its content changes.
+   - **Only** `*.html`/`*.js`/`*.css`, with `Cache-Control: no-cache`. These aren't
+     content-hashed — the same filename is reused across deploys — so without an
+     explicit header they fall back to CloudFront's/the browser's own heuristic
+     caching, which can leave a page opened before a deploy serving stale HTML
+     alongside a newly-deployed JS file indefinitely. `no-cache` doesn't disable
+     caching outright, it requires revalidation before reuse, which is what a
+     non-hashed filename needs.
+   - `aws s3 sync` only re-uploads an object whose size or modified time changed —
+     flipping this policy doesn't retroactively fix objects already sitting in the
+     bucket with no `Cache-Control` from a previous deploy. Confirm with
+     `aws s3api head-object` after the first deploy under the new workflow; if
+     `CacheControl` is still absent on an unchanged file, it needs a one-time,
+     metadata-only rewrite (`aws s3 cp` in place, `--metadata-directive REPLACE`,
+     explicit `--content-type` per extension — a same-bucket `cp` does not infer
+     content type from the key the way an upload does, so leaving it to guess
+     produces `binary/octet-stream` on every object).
 3. Invalidate the CloudFront distribution (`/*`)
 
 **Backend job:**
