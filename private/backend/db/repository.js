@@ -11,6 +11,7 @@
 // re-derives the slug, and default list sort order.
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, ScanCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+const { ConditionalCheckFailedException } = require('@aws-sdk/client-dynamodb');
 const crypto = require('crypto');
 
 const AWS_REGION = process.env.AWS_REGION || undefined;
@@ -84,6 +85,30 @@ class Repository {
     }
     await getDocClient().send(new PutCommand({ TableName: this.tableName, Item: item }));
     return item;
+  }
+
+  // Conditional create with a caller-supplied id, rather than this.create's
+  // random makeId() — for tables where the id is deterministic by design
+  // (Campaigns' fixed site-wide ids and its "roundtable:<id>"/
+  // "initiative:<id>" ids), so "ensure this item exists" can be called
+  // repeatedly without ever overwriting whatever's already there. A
+  // conditional-check failure (the item already exists) is the expected,
+  // successful outcome of that call, not an error — it's swallowed and
+  // null returned; any other DynamoDB error still propagates.
+  async createWithId(id, fields) {
+    if (!this.tableName) return null;
+    const item = { id, ...fields };
+    try {
+      await getDocClient().send(new PutCommand({
+        TableName: this.tableName,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(id)',
+      }));
+      return item;
+    } catch (err) {
+      if (err instanceof ConditionalCheckFailedException) return null;
+      throw err;
+    }
   }
 
   async update(id, updates) {

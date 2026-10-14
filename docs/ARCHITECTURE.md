@@ -24,7 +24,7 @@
 | CloudFront distribution | `E20BW0W9XR1KU3` |
 | Lambda function | `purpose-investor-network-backend-pin-backend` |
 | IAM role | `purpose-investor-network-backend-role` |
-| DynamoDB tables | `purpose-investor-network-{roundtables,initiatives,posts,images,press,investments,events,settings,sessions,users}` |
+| DynamoDB tables | `purpose-investor-network-{roundtables,initiatives,posts,images,press,investments,events,settings,sessions,users,campaigns,campaign-entries}` |
 
 ### Staging
 A fully parallel, non-public environment — every resource `-stage`-suffixed, no shared
@@ -126,6 +126,29 @@ needed — both tables are `PAY_PER_REQUEST`, which GSIs inherit automatically. 
 backfill on an existing table is asynchronous (`Backfilling` in `describe-table` until
 done); on a table this small it's expected to finish before the next request, but this
 is the moment that assumption could someday stop holding.
+
+**Required before deploying Campaigns.** `AWS_CAMPAIGNS_TABLE`/`AWS_CAMPAIGN_ENTRIES_TABLE`
+(see `docs/DATA-MODEL.md`'s Campaigns/Campaign entries sections) must exist before code
+that reads or writes them is deployed — read paths return `[]`/`null` gracefully when a
+table var is unset, but every write path throws, and that includes the public interest
+form and the newsletter/waitlist signup forms, not just the admin Campaigns tab. On
+staging before the staging deploy, on production before the production deploy:
+
+```bash
+aws dynamodb create-table \
+  --table-name purpose-investor-network-campaigns \
+  --attribute-definitions AttributeName=id,AttributeType=S \
+  --key-schema AttributeName=id,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+
+aws dynamodb create-table \
+  --table-name purpose-investor-network-campaign-entries \
+  --attribute-definitions AttributeName=campaignId,AttributeType=S AttributeName=email,AttributeType=S \
+  --key-schema AttributeName=campaignId,KeyType=HASH AttributeName=email,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST
+```
+
+Repeat with the `-stage` suffix for staging.
 
 Net effect: the real infrastructure state (Lambda config, IAM policies) lives in AWS,
 reconciled imperatively by the deploy workflows' inline scripts — there's no single

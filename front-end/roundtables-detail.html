@@ -31,6 +31,7 @@
   <script src="/component/card.js"></script>
   <script src="/component/banner.js"></script>
   <script src="/component/detail-page.js"></script>
+  <script src="/component/interest-form.js"></script>
   <script>
     renderDetailPage({
       contentElId: 'roundtable-content',
@@ -38,7 +39,7 @@
       load: (slug) => fetchJson(`/api/roundtables/${encodeURIComponent(slug)}`),
       pageTitle: (data) => `${data.roundtable.name} | Purpose Investor Network`,
       mapBanner: (data) => ({ imageUrl: data.roundtable.imageUrl, title: data.roundtable.name, description: data.roundtable.description }),
-      renderBody: ({ initiatives, updates }) => {
+      renderBody: ({ initiatives, updates, interest }) => {
         const initiativesById = {};
         initiatives.forEach((i) => { initiativesById[i.id] = i; });
 
@@ -73,7 +74,15 @@
             <h3>Latest updates</h3>
             <div class="update-list">${updatesHtml}</div>
           </section>
+
+          ${interestFormHtml({ formId: 'roundtable-interest-form', consentText: interest.consentText })}
         `;
+      },
+      afterRender: () => {
+        initInterestForm({
+          formId: 'roundtable-interest-form',
+          submitUrl: `/api/roundtables/${encodeURIComponent(lastPathSegment())}/interest`,
+        });
       },
       notFoundText: 'We couldn’t find that roundtable. It may have been renamed or removed.',
       errorText: 'Unable to load this roundtable right now. Please try again later.',

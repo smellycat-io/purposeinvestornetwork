@@ -15,7 +15,7 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="survey" type="button">Survey Responses</button>
+    <button class="tab-btn active" data-tab="campaigns" type="button">Campaigns</button>
     <button class="tab-btn" data-tab="posts" type="button">Posts &amp; Content</button>
     <button class="tab-btn" data-tab="content" type="button">Roundtables &amp; Initiatives</button>
     <button class="tab-btn" data-tab="press" type="button">Press</button>
@@ -24,14 +24,63 @@
     <button class="tab-btn" data-tab="users" type="button">Users</button>
   </nav>
 
-  <section id="tab-survey" class="tab-panel active">
+  <section id="tab-campaigns" class="tab-panel active">
     <div class="panel-header">
-      <h2>Survey Responses</h2>
-      <p class="muted">Showing up to 200 responses.</p>
+      <h2>Campaigns</h2>
     </div>
+
+    <div class="field-row">
+      <label class="field">
+        <span>Campaign</span>
+        <select id="campaign-select"></select>
+      </label>
+      <div class="field" id="campaign-archived-field">
+        <label class="inline-checkbox">
+          <input type="checkbox" id="campaign-show-archived">
+          Show archived
+        </label>
+      </div>
+    </div>
+
+    <div class="panel-header">
+      <h3 id="campaign-detail-name">&nbsp;</h3>
+      <span class="muted" id="campaign-detail-meta"></span>
+    </div>
+
+    <div class="card form-card" id="campaign-results-emails-card">
+      <label class="field">
+        <span>Results emails</span>
+        <textarea id="campaign-results-emails" rows="2" placeholder="Leave blank to use the default recipients below"></textarea>
+      </label>
+      <p class="muted">Responses to this campaign are emailed here. Defaults to the email on the account that created it.</p>
+      <p class="muted" id="campaign-effective-emails"></p>
+      <div class="form-actions" id="campaign-results-emails-actions">
+        <button class="btn btn-accent" id="campaign-save-results-emails-btn" type="button">Save</button>
+        <label class="inline-checkbox">
+          <input type="checkbox" id="campaign-notify-on-entry">
+          Email on new entries
+        </label>
+        <label class="inline-checkbox" id="campaign-archived-toggle-field">
+          <input type="checkbox" id="campaign-archived-toggle">
+          Archived
+        </label>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <label class="field">
+        <span>Show</span>
+        <select id="campaign-consent-filter">
+          <option value="all">Everyone</option>
+          <option value="yes">Opted in only</option>
+        </select>
+      </label>
+      <button class="btn-small" id="campaign-copy-emails-btn" type="button">Copy emails</button>
+    </div>
+
     <table class="data-table">
-      <thead><tr><th>ID</th><th>Created</th><th>Email</th><th>Answers</th></tr></thead>
-      <tbody id="survey-rows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+      <thead id="campaign-entries-head"></thead>
+      <tbody id="campaign-entries-rows"><tr><td class="muted">Loading…</td></tr></tbody>
     </table>
   </section>
 
@@ -369,47 +418,27 @@
   </section>
 
   <section id="tab-settings" class="tab-panel">
-    <div class="content-columns">
-      <div class="content-column">
-        <div class="panel-header">
-          <h2>Notification Email</h2>
-        </div>
-        <p class="muted">Survey submissions and waitlist signups are emailed here.</p>
-        <form id="notify-email-form" class="card form-card">
-          <label class="field">
-            <span>Email address</span>
-            <input type="email" id="settings-notify-email" required>
-          </label>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-accent">Save Email</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="content-column">
-        <div class="panel-header">
-          <h2>Change Password</h2>
-        </div>
-        <p class="muted">Updates the admin login password immediately.</p>
-        <form id="password-form" class="card form-card">
-          <label class="field">
-            <span>Current password</span>
-            <input type="password" id="settings-current-password" autocomplete="current-password" required>
-          </label>
-          <label class="field">
-            <span>New password</span>
-            <input type="password" id="settings-new-password" autocomplete="new-password" minlength="8" required>
-          </label>
-          <label class="field">
-            <span>Confirm new password</span>
-            <input type="password" id="settings-confirm-password" autocomplete="new-password" minlength="8" required>
-          </label>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-accent">Update Password</button>
-          </div>
-        </form>
-      </div>
+    <div class="panel-header">
+      <h2>Change Password</h2>
     </div>
+    <p class="muted">Updates the admin login password immediately.</p>
+    <form id="password-form" class="card form-card">
+      <label class="field">
+        <span>Current password</span>
+        <input type="password" id="settings-current-password" autocomplete="current-password" required>
+      </label>
+      <label class="field">
+        <span>New password</span>
+        <input type="password" id="settings-new-password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <label class="field">
+        <span>Confirm new password</span>
+        <input type="password" id="settings-confirm-password" autocomplete="new-password" minlength="8" required>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-accent">Update Password</button>
+      </div>
+    </form>
   </section>
 
   <section id="tab-users" class="tab-panel">
