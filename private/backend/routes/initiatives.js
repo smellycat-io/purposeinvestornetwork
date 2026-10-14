@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin, requireRole, roundtableArrayContains } = require('../shared/auth.js');
+const { requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 
 const router = Router();
@@ -24,11 +24,19 @@ router.get(
   }, 'Unable to load initiative.')
 );
 
+// Admin sees every Initiative; a Chair sees only ones whose roundtableIds
+// contains their own Roundtable — same filtering shape as GET
+// /api/admin/users (routes/users.js): done here in the route handler, not
+// db/content.js, keeping content.js role-agnostic.
 router.get(
   '/api/admin/initiatives',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
-    res.json(await content.listInitiatives());
+    const all = await content.listInitiatives();
+    if (req.session.role === 'chair') {
+      return res.json(all.filter((i) => roundtableArrayContains(i.roundtableIds, req.session.roundtableId)));
+    }
+    res.json(all);
   }, 'Unable to load initiatives.')
 );
 

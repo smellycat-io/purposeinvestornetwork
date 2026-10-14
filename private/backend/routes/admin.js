@@ -1,13 +1,20 @@
 const express = require('express');
 const { join } = require('path');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 
 const router = express.Router();
 
-router.get('/admin', requireAdmin, (req, res) => {
+// Any logged-in role, not just Admin/Chair — a Member has nowhere else to
+// land yet (the Member-facing area is not yet implemented; see
+// docs/DATA-MODEL.md) and login always redirects to /admin regardless of
+// role, so excluding Member here would break their post-login experience
+// outright rather than just limiting what they can do once there. Same
+// effective access as the flat requireAdmin this replaces — only the
+// middleware is now role-aware, not the actual gate.
+router.get('/admin', requireRole('admin', 'chair', 'member'), (req, res) => {
   res.sendFile(join(__dirname, '..', 'admin/admin.html'));
 });
 
-router.use('/admin/assets', requireAdmin, express.static(join(__dirname, '..', 'admin')));
+router.use('/admin/assets', requireRole('admin', 'chair', 'member'), express.static(join(__dirname, '..', 'admin')));
 
 module.exports = router;

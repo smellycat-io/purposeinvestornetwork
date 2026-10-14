@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin, requireRole, roundtableArrayContains } = require('../shared/auth.js');
+const { requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { filterVisible, canSeeFull } = require('../shared/access.js');
 const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
@@ -36,11 +36,16 @@ router.get(
   }, 'Unable to load investment.')
 );
 
+// Same Admin-sees-all / Chair-scoped shape as GET /api/admin/initiatives.
 router.get(
   '/api/admin/investments',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
-    res.json(await content.listInvestments());
+    const all = await content.listInvestments();
+    if (req.session.role === 'chair') {
+      return res.json(all.filter((i) => roundtableArrayContains(i.roundtableIds, req.session.roundtableId)));
+    }
+    res.json(all);
   }, 'Unable to load investments.')
 );
 

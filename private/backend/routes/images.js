@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { s3Client, S3_BUCKET } = require('../shared/s3Client.js');
 
@@ -14,9 +14,15 @@ const router = Router();
 // behavior — no separate hosting or cache-behavior setup needed.
 const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024; // keeps the base64 payload under the 6MB Lambda request-payload limit
 
+// Admin and Chair both — the image library has no per-item ownership
+// concept (listImages() already returns every upload regardless of who
+// added it), and Chairs need it to attach images to the Initiatives/Posts/
+// Investments they already have write access to within their own
+// Roundtable; gating it Admin-only would silently break their image
+// picker for content they're otherwise allowed to edit.
 router.post(
   '/api/admin/uploads',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
     if (!s3Client) {
       return res.status(503).json({ error: 'Image uploads are not configured.' });
@@ -49,7 +55,7 @@ router.post(
 
 router.get(
   '/api/admin/images',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
     res.json(await content.listImages());
   }, 'Unable to load images.')
@@ -57,7 +63,7 @@ router.get(
 
 router.get(
   '/api/admin/stock-images',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
     if (!s3Client) {
       return res.json([]);
