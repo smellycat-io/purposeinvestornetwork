@@ -11,12 +11,14 @@ backend running as a single Lambda behind API Gateway and CloudFront. No fronten
 framework — plain HTML/CSS/JS pages sharing a `shared/` component library.
 
 - **Frontend**: static HTML pages in `front-end/`, shared components/styles in `shared/`
-  (copied into `front-end/` at deploy time — see Deploy below)
+  (copied into `front-end/` at deploy time — see `docs/ARCHITECTURE.md`'s Deploy flow
+  section)
 - **Backend**: Express app (`private/backend/index.js`) wrapped for Lambda via
   `serverless-http` (`private/backend/lambda.js`)
 - **Database**: DynamoDB — one table per content type (Roundtables, Initiatives, Posts,
-  Press, Investments, Events, Images, Users), not a single-table design. See
-  `docs/DATA-MODEL.md` for schema and the table-name env vars.
+  Press, Investments, Events, Images, Users, Sessions, Settings, Campaigns, Campaign
+  Entries), not a single-table design. See `docs/DATA-MODEL.md` for schema and the
+  table-name env vars.
 - **Auth**: `express-session` + a Users table (email/password, invite links, password
   reset). No third-party auth provider. Every protected route is role-gated
   (Admin/Chair/Member via `req.session.role`), see `docs/DATA-MODEL.md`.
@@ -42,11 +44,14 @@ private/
                         # content.js (Roundtables/Initiatives/Posts/etc.), users.js,
                         # campaigns.js, sessions.js, settings.js, store.js, dynamoClient.js
     routes/            # one file per resource, matching db/ where it exists
-                        # (roundtables.js, initiatives.js, users.js, auth.js, ...)
+                        # (roundtables.js, initiatives.js, users.js, auth.js,
+                        # member.js, ...)
     shared/             # cross-cutting helpers: auth.js (requireRole), access.js
                         # (memberOnly gating), asyncRoute.js, config.js, email.js,
                         # passwords.js, s3Client.js, sanitizeHtml.js
     admin/              # admin dashboard UI (html/css/js) — separate from front-end/
+    member/             # role-gated member pages (html/css/js), served by the
+                        # Lambda — separate from front-end/ the same way admin/ is
     sentry/
   infra/                # CloudFormation templates + CloudFront Functions
 scripts/                # build/packaging scripts (generate-backend-package.js)
@@ -129,13 +134,16 @@ there's no way back in when that table or its indexes break. `routes/auth.js`'s 
 handler enforces this by wrapping only the `findUserByEmail` call in its own
 try/catch, falling through to the bootstrap check on failure exactly as if no user
 record existed. **Never make the bootstrap path depend on a successful database call
-first** — that's the specific mistake behind the 2026-09-17 incident: the
-`email-index` GSI wasn't provisioned before the role rollout deployed,
-`findUserByEmail` threw, and the single try/catch then wrapping the whole handler
-treated that as a hard failure — locking out the bootstrap admin along with every real
-account, since a `catch` meant for genuinely unexpected errors had quietly become the
-only thing standing between a routine index outage and the last-resort login. Any
+first** — a failed index or table lookup once locked out the last-resort login. Any
 future change to this handler must preserve the try/catch split.
+
+### Role-gated pages are served by the Lambda
+
+Anything in `front-end/` is public. A new gated path lives under `private/backend/`,
+is mounted with `requireRole`, must be added to `BACKEND_PATH_PATTERNS` in
+`private/infra/patch-cloudfront-distribution.js`, and the patch must be applied to the
+stage and production distributions before the code deploys. Without the behavior the
+path falls through to S3 and returns `AccessDenied`.
 
 ### Error handling
 
@@ -172,10 +180,7 @@ learn the system as it stands, not the sequence of PRs that produced it.
 vs. in progress, with open questions logged there rather than silently resolved by
 whoever happens to be implementing. Update Status whenever a major feature ships or a
 new open question surfaces — it's the fastest way for anyone (including a future Claude
-Code session) to tell whether the repo's docs match its actual state. `docs/ARCHITECTURE.md`
-and `docs/DATA-MODEL.md` now exist — `README.md` is still the original SQLite-prototype
-version (see Avoiding Duplicate Code & Bloat below), so the next Docs Sync task is
-bringing its Status section in line with them.
+Code session) to tell whether the repo's docs match its actual state.
 
 **Periodic Staleness Check.** When working in an area of the repo — `infra/`, a given
 route file, a doc — briefly check whether adjacent files in that area still reflect
@@ -267,6 +272,10 @@ a timer or against the whole repo at once.
   the delivery match, without opening the PR. The PR description still gets its full
   summary as already required above — this chat-facing mini summary is an addition
   for quick confirmation, not a shorter replacement for it.
+- **Infra before deploy.** Any change that needs manual AWS work (new tables, GSIs,
+  CloudFront behaviors, secrets) lists the exact commands in the PR description in a
+  copy-paste block, and they are applied to an environment before that environment's
+  deploy. One line of rationale, no incident narrative.
 
 ## Comments & Documentation
 
