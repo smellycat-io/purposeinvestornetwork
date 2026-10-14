@@ -20,6 +20,12 @@ describe('visibleTabs', () => {
       'campaigns', 'posts', 'content', 'investments-events', 'settings', 'users',
     ]);
   });
+
+  test('an unrecognized role sees no tabs — fail closed, not a default list', () => {
+    expect(visibleTabs(null)).toEqual([]);
+    expect(visibleTabs(undefined)).toEqual([]);
+    expect(visibleTabs('member')).toEqual([]);
+  });
 });
 
 describe('defaultTab', () => {
@@ -29,6 +35,10 @@ describe('defaultTab', () => {
 
   test('is campaigns for chair too (first tab left once Press is hidden)', () => {
     expect(defaultTab('chair')).toBe('campaigns');
+  });
+
+  test('is undefined for an unrecognized role — nothing to select', () => {
+    expect(defaultTab(null)).toBeUndefined();
   });
 });
 

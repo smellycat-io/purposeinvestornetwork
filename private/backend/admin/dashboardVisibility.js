@@ -14,9 +14,13 @@
   // Press is org-wide third-party coverage with no Roundtable to scope to
   // (requireRole('admin'), no Chair path) — the one tab a Chair never has a
   // use for. Every other tab stays, scoped internally by its own controls
-  // instead of being hidden outright.
+  // instead of being hidden outright. An unrecognized role (null when
+  // GET /api/users/me failed and no role was ever confirmed) gets no tabs
+  // at all — fail closed rather than guessing.
   function visibleTabs(role) {
-    return role === 'chair' ? ALL_TABS.filter((tab) => tab !== 'press') : ALL_TABS.slice();
+    if (role === 'chair') return ALL_TABS.filter((tab) => tab !== 'press');
+    if (role === 'admin') return ALL_TABS.slice();
+    return [];
   }
 
   // Always the first tab the session can see, so a hidden tab (Press, for a

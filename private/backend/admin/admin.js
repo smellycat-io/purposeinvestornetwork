@@ -93,9 +93,24 @@
     if (!currentUserPromise) {
       currentUserPromise = api('/api/users/me')
         .then((me) => { state.me = me; return me; })
-        .catch((err) => { showToast('Unable to load your profile: ' + err.message, true); return null; });
+        .catch(() => { showProfileLoadError(); return null; });
     }
     return currentUserPromise;
+  }
+
+  // Fails closed: no role was ever confirmed, so every tab and admin-only
+  // control stays exactly as hidden as it already was before this ran
+  // (admin.css's data-role/admin-only rules default closed) — this just
+  // additionally hides every *other* tab too, and replaces them with an
+  // explicit way to retry instead of a dashboard with nothing in it.
+  function showProfileLoadError() {
+    document.body.classList.add('has-profile-error');
+    const el = document.getElementById('profile-load-error');
+    if (el) el.classList.remove('hidden');
+  }
+
+  function initProfileLoadError() {
+    document.getElementById('profile-load-error-reload-btn').addEventListener('click', () => window.location.reload());
   }
 
   // "Signed in as <name or email> (<Level>, <roundtable name>)" — the
@@ -1181,13 +1196,12 @@
     return !!(state.me && state.me.role === 'admin');
   }
 
-  // state.me resolves before anything that reads it ever runs (every load*Tab
-  // function awaits loadCurrentUser, and DOMContentLoaded awaits it before
-  // the first render) — the 'admin' fallback here only guards a call made
-  // before that, which defaults open the same way admin.css's admin-only
-  // class defaults *closed*: neither should ever matter in practice.
+  // null when GET /api/users/me hasn't resolved yet or failed outright
+  // (showProfileLoadError handles the latter) — DashboardVisibility treats
+  // any role it doesn't explicitly recognize as having nothing to show,
+  // so this stays a fail-closed default rather than guessing 'admin'.
   function currentRole() {
-    return state.me ? state.me.role : 'admin';
+    return state.me ? state.me.role : null;
   }
 
   function currentRoundtableId() {
@@ -1485,6 +1499,7 @@
     initInvestmentsEventsTab();
     initSettingsTab();
     initUsersTab();
+    initProfileLoadError();
     // Awaited before the first render (Campaigns, below) so admin.css's
     // data-role selector and every isAdminSession()/isChairSession() call a
     // render function makes are already correct the first time anything
@@ -1492,6 +1507,9 @@
     // second, corrected render.
     await loadCurrentUser();
     await applySessionRole();
-    loadCampaignsTab();
+    // state.me is null when the profile load failed — showProfileLoadError
+    // already hid every tab, so there's nothing for Campaigns to render
+    // into, and fetching it would just risk a second, redundant toast.
+    if (state.me) loadCampaignsTab();
   });
 })();

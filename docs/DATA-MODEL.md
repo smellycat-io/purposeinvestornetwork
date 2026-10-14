@@ -268,9 +268,8 @@ always treated as `admin`.
 
 **Role homes (`shared/auth.js`'s `roleHome(role)`).** Login redirects to each role's
 own home instead of a single shared landing page: a Member goes to `/member`, an Admin
-or Chair goes to `/admin` (there's no distinct Chair-facing dashboard yet — see "Not yet
-implemented" below). `GET /login` for an already-logged-in session redirects the same
-way, and `requireRole` redirects a logged-in session with the wrong role to its
+or Chair goes to `/admin`. `GET /login` for an already-logged-in session redirects the
+same way, and `requireRole` redirects a logged-in session with the wrong role to its
 `roleHome` rather than back to `/login` (which would just bounce it straight back) —
 see the `requireRole` bullet below.
 

@@ -45,6 +45,28 @@ body {
    flashing on load. */
 body:not([data-role="admin"]) .admin-only { display: none; }
 
+.profile-load-error {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.profile-load-error p { margin: 0; }
+
+.profile-load-error.hidden { display: none; }
+
+/* GET /api/users/me failed — no role was ever confirmed, so every tab and
+   panel stays hidden (not just the admin-only ones) rather than falling
+   back to a guessed role's worth of controls. */
+body.has-profile-error .tabs,
+body.has-profile-error .tab-panel {
+  display: none;
+}
+
 .logout-link {
   color: var(--accent);
   font-weight: 700;

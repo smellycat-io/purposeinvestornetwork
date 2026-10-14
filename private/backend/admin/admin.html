@@ -27,6 +27,14 @@
     <button class="tab-btn" data-tab="users" type="button">Users</button>
   </nav>
 
+  <!-- Shown instead of every tab/panel when GET /api/users/me fails — with
+       no role confirmed, the dashboard fails closed rather than guessing a
+       default role's worth of tabs and controls. -->
+  <div id="profile-load-error" class="profile-load-error hidden">
+    <p>Unable to load your profile. Reload the page.</p>
+    <button type="button" class="btn btn-accent" id="profile-load-error-reload-btn">Reload</button>
+  </div>
+
   <section id="tab-campaigns" class="tab-panel active">
     <div class="panel-header">
       <h2>Campaigns</h2>
