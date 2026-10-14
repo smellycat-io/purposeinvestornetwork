@@ -304,8 +304,11 @@ h1, h2, h3, h4 {
 
 /* .subscribe-message/.waitlist-form live on a light background here (unlike
    the homepage's dark "Stay Informed" section), so the error color needs to
-   flip to stay legible. */
-.join-waitlist .subscribe-message--error {
+   flip to stay legible. Same reasoning for .interest-form-section
+   (shared/component/interest-form.js), on the same light page-shell
+   background as .join-waitlist. */
+.join-waitlist .subscribe-message--error,
+.interest-form-section .subscribe-message--error {
   color: #b91c1c;
 }
 
@@ -532,6 +535,30 @@ h1, h2, h3, h4 {
 
 .waitlist-form .cta-button {
   margin-top: 4px;
+}
+
+/* The interest form's consent checkbox (shared/component/interest-form.js)
+   reuses .waitlist-form otherwise, but needs its own row layout — the
+   generic ".waitlist-form input" padding/border above is sized for text
+   inputs, not a checkbox. */
+.waitlist-form .field--consent {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.waitlist-form .field--consent input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.waitlist-form .field--consent span {
+  font-weight: 400;
+  font-size: 0.95rem;
+  color: var(--text);
 }
 
 @media (max-width: 560px) {

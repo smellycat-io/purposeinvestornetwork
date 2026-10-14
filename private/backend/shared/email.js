@@ -3,15 +3,15 @@
 //
 // sendEmail() is the primitive — any recipient, used by invite/reset-
 // password emails where the destination is the target user, not the site
-// owner. sendNotification() is a thin wrapper over it for the "notify the
-// site owner" case (survey/waitlist signups), resolving the destination
-// fresh on every send from getEffectiveNotifyEmail() (settings-table
-// override, else the NOTIFY_EMAIL env var) so an admin changing it via the
-// settings page takes effect immediately, with no redeploy.
+// owner. notifyCampaign() is the "tell whoever's results emails are
+// registered for this campaign" case (survey/waitlist/newsletter/interest-
+// form entries), resolving recipients fresh on every send via
+// db/campaigns.js's resolveResultsEmails — an Admin's resultsEmails edit or
+// a newly-assigned Chair takes effect on the very next entry, no redeploy.
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { captureException } = require('@sentry/aws-serverless');
 const config = require('./config.js');
-const { getEffectiveNotifyEmail } = require('../db/settings.js');
+const { resolveResultsEmails } = require('../db/campaigns.js');
 
 let sesClient = null;
 if (config.SES_FROM_EMAIL) {
@@ -43,10 +43,19 @@ async function sendEmail(toAddress, subject, bodyText) {
   }
 }
 
-async function sendNotification(subject, bodyText) {
-  const notifyEmail = await getEffectiveNotifyEmail();
-  if (!notifyEmail) return false;
-  return sendEmail(notifyEmail, subject, bodyText);
+// Sends to every resolved recipient, awaited sequentially (not
+// Promise.all) — same reasoning as sendEmail's own "awaited by callers"
+// note above: Lambda can freeze the execution environment right after the
+// response is sent, and a batch of unawaited in-flight sends is exactly
+// the shape that would get silently dropped. Returns true if there was at
+// least one recipient to send to, false if resolution came up empty (the
+// entry itself is still saved either way — this only gates the email).
+async function notifyCampaign(campaign, subject, bodyText) {
+  const recipients = await resolveResultsEmails(campaign);
+  for (const recipient of recipients) {
+    await sendEmail(recipient, subject, bodyText);
+  }
+  return recipients.length > 0;
 }
 
 // Shared by routes/users.js's invite route, the resend route, and nowhere
@@ -79,4 +88,4 @@ async function sendResetEmail(toAddress, link) {
   );
 }
 
-module.exports = { sendEmail, sendNotification, sendInviteEmail, sendResetEmail };
+module.exports = { sendEmail, notifyCampaign, sendInviteEmail, sendResetEmail };

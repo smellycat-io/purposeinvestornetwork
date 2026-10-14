@@ -98,8 +98,8 @@ describe('role-gated routes', () => {
     expect(response.headers.location).toBe('/login');
   });
 
-  test('GET /api/admin/survey-responses returns JSON 401 when logged out', async () => {
-    const response = await request(app).get('/api/admin/survey-responses');
+  test('GET /api/admin/campaigns returns JSON 401 when logged out', async () => {
+    const response = await request(app).get('/api/admin/campaigns');
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'Not logged in.' });
   });
@@ -116,8 +116,8 @@ describe('role-gated routes', () => {
     const adminPage = await agent.get('/admin');
     expect(adminPage.status).toBe(200);
 
-    const surveyResponses = await agent.get('/api/admin/survey-responses');
-    expect(surveyResponses.status).toBe(200);
-    expect(Array.isArray(surveyResponses.body)).toBe(true);
+    const campaigns = await agent.get('/api/admin/campaigns');
+    expect(campaigns.status).toBe(200);
+    expect(Array.isArray(campaigns.body)).toBe(true);
   });
 });

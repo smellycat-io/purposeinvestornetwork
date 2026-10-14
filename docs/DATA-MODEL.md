@@ -167,6 +167,60 @@ default in-memory session store would bounce an already-logged-in admin back to
 | `data` | string | JSON-serialized session object |
 | `expiresAt` | number | unix seconds, TTL attribute |
 
+### Campaigns
+`AWS_CAMPAIGNS_TABLE` — one row per campaign: the three site-wide ones (`survey`,
+`waitlist`, `newsletter` — fixed ids, created once) plus one per Roundtable
+(`roundtable:<id>`) and Initiative (`initiative:<id>`), created on demand. Deterministic
+ids make creation idempotent — `db/campaigns.js`'s `ensureCampaign` is a conditional put
+(`attribute_not_exists(id)`) that's a no-op, not an error, when the row already exists,
+so every Roundtable/Initiative campaign is backfilled on every `GET
+/api/admin/campaigns` call without ever overwriting an Admin's own edits to it.
+
+| field | type | notes |
+|---|---|---|
+| `id` | string | `survey` \| `waitlist` \| `newsletter` \| `roundtable:<id>` \| `initiative:<id>` |
+| `name` | string | the Roundtable's `name` / Initiative's `title` for those two types |
+| `type` | `survey` \| `waitlist` \| `newsletter` \| `roundtable-interest` \| `initiative-interest` | |
+| `roundtableId` / `initiativeId` | string \| null | set for exactly one type each; null for the three site-wide campaigns |
+| `ownerUserId` | string \| null | the Admin/Chair who created it; null for a bootstrap-session creator (no Users-table record) or a backfilled pre-existing Roundtable/Initiative |
+| `resultsEmails` | string[] \| null | an explicit Admin override (`PATCH /api/admin/campaigns/:id`); `null` means derived — see Recipient resolution below |
+| `notifyOnEntry` | boolean | whether a new entry sends an email at all; defaults `true` for `survey`/`waitlist`/both interest types, `false` for `newsletter` |
+| `archived` | boolean | set when the underlying Roundtable/Initiative is deleted; entries are kept |
+| `createdAt` / `updatedAt` | ISO string | |
+
+### Campaign entries
+`AWS_CAMPAIGN_ENTRIES_TABLE` — composite key (`campaignId` HASH, `email` RANGE), not a
+generic `id`, so every entry for a campaign is a native `Query` with no GSI, and a
+second submission from the same email upserts the one row instead of creating a
+duplicate. `survey` is the one campaign with no rows here at all — see "Survey entries"
+below.
+
+| field | type | notes |
+|---|---|---|
+| `campaignId` | string | partition key — matches a Campaigns row's `id` |
+| `email` | string | sort key, always lowercased |
+| `name` / `phone` / `address` / `message` | string \| null | which fields apply depends on the campaign type (see the API Endpoints table) |
+| `consent` | boolean | OR'd with whatever was already stored on upsert, never overwritten to `false` — this form has no way to revoke consent, only to (re-)affirm it |
+| `consentText` | string | the exact wording shown next to the checkbox at the time of this entry, composed by `db/campaigns.js`'s `composeConsentText` (interest campaigns) or recorded directly (`newsletter`/`waitlist`, which have no checkbox — see the Role & Permission Model note below) |
+| `surveyResponseId` / `freeMonthEarned` | string \| null / boolean | `waitlist` entries only — see "Free-month linking" below |
+| `createdAt` | ISO string | kept from the first submission, never updated |
+| `updatedAt` | ISO string | bumped on every submission, including a resubmit |
+
+**Survey entries.** The `survey` campaign's entries are never written to this table —
+survey responses still save exactly where they did before Campaigns existed (the legacy
+`AWS_DYNAMODB_TABLE`, or the local JSON store when that's unset; see `POST /api/survey`
+in `routes/survey-responses.js`, unchanged). `GET /api/admin/campaigns/survey/entries`
+reads through an adapter (`db/campaigns.js`'s `listLegacySurveyEntries`) straight from
+those same legacy sources instead. Entries already sitting in Lambda's ephemeral `/tmp`
+local store were never durable and aren't migrated.
+
+**Free-month linking.** A `waitlist` entry gets `surveyResponseId`/`freeMonthEarned` set
+once the same email has a survey response, regardless of which happened first: a
+waitlist save checks the legacy survey sources by email (`findLegacySurveyRecordIdByEmail`),
+and a survey save checks for a `waitlist` entry by email and updates it in place
+(`linkSurveyToWaitlistEntry`). Both are DynamoDB reads now — this replaced an
+equivalent local-store-only version that didn't survive a cold start.
+
 ## API Endpoints
 
 Every content and Users route under `/api/admin/*`, plus the `/admin` dashboard page,
@@ -186,9 +240,8 @@ route is ever added without a `requireRole` call.
 | Events | `GET /api/events[/:slug]` | `GET/POST/PUT/DELETE /api/admin/events[/:id]` — Admin only, no Chair path |
 | Images | — | `POST /api/admin/uploads`, `GET /api/admin/images`, `GET /api/admin/stock-images` — Admin or Chair, unscoped (shared library, no per-item ownership) |
 | Users | `POST /api/accept-invite`, `POST /api/forgot-password`, `POST /api/reset-password` | `GET/PATCH/DELETE /api/admin/users[/:id]`, `POST /api/admin/users/invite`, `POST /api/admin/users/:id/resend-invite` — Admin or Chair, scoped per Role & Permission Model below; `POST /api/admin/users/:id/send-reset` — Admin only; `GET/PATCH /api/users/me` — any logged-in role |
-| Survey responses | `POST /api/survey` | `GET /api/admin/survey-responses` — Admin or Chair, unscoped |
-| Subscribers | `POST /api/subscribe` | `GET /api/admin/subscribers` — Admin or Chair, unscoped |
-| Settings | — | `GET /api/admin/settings`, `PUT /api/admin/settings/notify-email` — Admin only; `PUT /api/admin/settings/password` — any logged-in role (self-service password change) |
+| Campaigns | `POST /api/survey`, `POST /api/subscribe`, `POST /api/roundtables/:slug/interest`, `POST /api/initiatives/:slug/interest` | `GET /api/admin/campaigns`, `GET /api/admin/campaigns/:id/entries` — Admin or Chair, scoped per Role & Permission Model below; `PATCH /api/admin/campaigns/:id` — Admin only |
+| Settings | — | `PUT /api/admin/settings/password` — any logged-in role (self-service password change) |
 | Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) — Admin or Chair; `GET /member` (member coming-soon page) — any logged-in role, Admin/Chair as a preview |
 
 ## Role & Permission Model
@@ -374,6 +427,46 @@ Roundtable concept to scope against. Events carry no `roundtableId`/`roundtableI
 field in the schema at all (see the Events table above), so there's nothing for a
 Chair's access to scope against without a schema change.
 
+**Campaigns (`GET /api/admin/campaigns`, `GET /api/admin/campaigns/:id/entries`, both
+`requireRole('admin', 'chair')`; `PATCH /api/admin/campaigns/:id`,
+`requireRole('admin')`).** `GET /api/admin/campaigns` idempotently ensures the three
+site-wide campaigns and backfills one for every existing Roundtable/Initiative before
+returning the visible set, so a campaign created before this feature shipped, or a
+Roundtable/Initiative created without ever hitting this endpoint, always catches up.
+Admin sees every campaign (plus archived ones, with `?archived=1`). A Chair sees the
+three site-wide campaigns, their own Roundtable's campaign, and any Initiative
+campaign whose Initiative's `roundtableIds` contains their Roundtable
+(`roundtableArrayContains`, resolved by joining against `content.listInitiatives()` —
+the Campaign row itself only stores `initiativeId`, not a copy of that Initiative's
+`roundtableIds`). `GET .../:id/entries` applies the identical visibility check to a
+single campaign, 403 outside it, and returns the entries unpaged. `PATCH` (Admin only)
+updates `resultsEmails` (a non-empty array of valid emails, or `null` to return to the
+derived default), `notifyOnEntry`, and `archived`.
+
+**Recipient resolution (`db/campaigns.js`'s `resolveResultsEmails`).** Lowercased and
+deduped, in order: (1) the campaign's `resultsEmails`, if an Admin has set one; (2) for
+a `roundtable-interest` campaign, every active Chair of that Roundtable
+(`listChairsForRoundtable`) plus the campaign's `ownerUserId`; (3) for an
+`initiative-interest` campaign, just the `ownerUserId` — an Initiative can span several
+Roundtables, so there's no single Chair to resolve to; (4) `NOTIFY_EMAIL` as a last
+resort. If every step comes up empty, the entry is still saved; nothing is sent.
+`shared/email.js`'s `notifyCampaign(campaign, subject, body)` sends to each resolved
+recipient and is only called when the campaign's `notifyOnEntry` is true and the entry
+being saved is new (a resubmission from the same email never re-notifies).
+
+**Consent (`consentText`, both site-wide signup forms and the interest form).** The
+newsletter and waitlist signup forms (`become-a-member.html`'s waitlist form, the
+footer newsletter form) have no checkbox — consent is recorded as `true` with a basis
+string (`"Subscribed via newsletter form"` / `"Joined membership waitlist"`) reflecting
+that submitting the form is itself the opt-in. This is a product/legal framing decision
+carried over as-is from how these two forms already worked before Campaigns existed,
+not a new determination made here — worth Elise's explicit confirmation rather than
+assuming it's settled. The interest form (Roundtables/Initiatives) is the one with a
+real unchecked-by-default checkbox, labeled with `composeConsentText(campaign.name)` —
+`"Yes, email me updates about <name>."` — the same function used for both the stored
+value and `GET /api/roundtables/:slug` / `GET /api/initiatives/:slug`'s
+`interest.consentText`, so the two can't drift.
+
 **Not yet implemented:**
 - The real Member-facing area. `GET /member` (`private/backend/member/member.html`,
   distinct from the public `front-end/` pages and the admin dashboard in
@@ -392,8 +485,12 @@ Chair's access to scope against without a schema change.
 - A role-aware admin dashboard UI: every backend route is now correctly role-gated and
   Chair-scoped (see above), but `private/backend/admin/admin.js` itself still shows the
   same tabs and unfiltered forms to every session regardless of role, outside the Users
-  tab. A Chair currently sees every tab (Press, Events, Settings included) and, where
-  the backend now rejects or filters their request, only a generic failed-to-load toast
-  — not a tab hidden outright or a form pre-scoped to what they're actually authorized
-  to touch. (A Member no longer reaches this dashboard at all — see `GET /member`
-  above.)
+  tab. A Chair currently sees every tab (Press and Events included, where every write
+  is rejected outright) and, where the backend now rejects or filters their request,
+  only a generic failed-to-load toast — not a tab hidden outright or a form pre-scoped
+  to what they're actually authorized to touch. (A Member no longer reaches this
+  dashboard at all — see `GET /member` above.)
+- Campaigns tab: CSV export and bulk sending. The Copy Emails button (a
+  comma-separated, deduped, lowercased list via the clipboard) is the only
+  results-handling built so far — exporting to a file or sending a batch email
+  directly from the dashboard are both still manual, outside-the-app steps.

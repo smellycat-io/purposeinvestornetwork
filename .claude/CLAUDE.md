@@ -40,7 +40,7 @@ private/
     lambda.js          # serverless-http wrapper — Lambda entry point
     db/                # one file per table/concern: repository.js (generic CRUD),
                         # content.js (Roundtables/Initiatives/Posts/etc.), users.js,
-                        # sessions.js, settings.js, store.js, dynamoClient.js
+                        # campaigns.js, sessions.js, settings.js, store.js, dynamoClient.js
     routes/            # one file per resource, matching db/ where it exists
                         # (roundtables.js, initiatives.js, users.js, auth.js, ...)
     shared/             # cross-cutting helpers: auth.js (requireRole), access.js
@@ -117,7 +117,7 @@ no flat, login-only gate left in this codebase. For page routes, no session redi
 to `/login`; a session with the wrong role redirects to `roleHome(role)` instead
 (`/member` for Member, `/admin` for Admin/Chair) — never back to `/login`, which would
 just bounce it straight back. Login itself redirects to `roleHome(role)` the same way.
-A new `/api/admin`, `/admin`, or `/member` route with no `requireRole` call is a bug:
+A new `/api/admin` or `/admin` route with no `requireRole` call is a bug:
 `shared/routeRoleGates.test.js` walks the live Express router and fails the build if
 one ever appears un-gated. Don't scatter role logic inline in route handlers —
 centralize it in `shared/auth.js` the way `requireRole` already is.

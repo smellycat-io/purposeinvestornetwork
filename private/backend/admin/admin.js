@@ -9,6 +9,8 @@
     investments: [],
     events: [],
     users: [],
+    campaigns: [],
+    campaignEntries: [],
     me: null,
   };
 
@@ -302,38 +304,258 @@
         document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'campaigns') loadCampaignsTab();
         if (btn.dataset.tab === 'posts') loadPostsTab();
         if (btn.dataset.tab === 'content') loadContentTab();
         if (btn.dataset.tab === 'press') loadPressTab();
         if (btn.dataset.tab === 'investments-events') loadInvestmentsEventsTab();
-        if (btn.dataset.tab === 'settings') loadSettingsTab();
         if (btn.dataset.tab === 'users') loadUsersTab();
       });
     });
   }
 
-  // --- Survey Responses ---
+  // --- Campaigns ---
+  //
+  // One tab covers five campaign types: the three site-wide ones (survey,
+  // waitlist, newsletter) and one per Roundtable/Initiative. A single
+  // dropdown (grouped by campaignGroupLabel) switches between them rather
+  // than separate per-type panels, since the controls around a campaign
+  // (results emails, consent filter, entries table) are the same shape
+  // regardless of which kind it is — only the entries table's extra
+  // columns and the consent filter's default actually vary by type.
 
-  async function loadSurvey() {
-    const tbody = document.getElementById('survey-rows');
-    try {
-      const responses = await api('/api/admin/survey-responses');
-      if (!responses.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="muted">No responses yet.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = responses.map((r) => `
-        <tr>
-          <td>${escapeHtml(r.id)}</td>
-          <td>${escapeHtml(r.createdAt)}</td>
-          <td>${escapeHtml(r.email || '—')}</td>
-          <td><pre>${escapeHtml(JSON.stringify(r.answers, null, 2))}</pre></td>
-        </tr>
+  const CAMPAIGN_TYPE_LABELS = {
+    survey: 'Survey',
+    waitlist: 'Membership Waitlist',
+    newsletter: 'Newsletter',
+    'roundtable-interest': 'Roundtable Interest',
+    'initiative-interest': 'Initiative Interest',
+  };
+
+  const INTEREST_TYPES = ['roundtable-interest', 'initiative-interest'];
+
+  function campaignGroupLabel(campaign) {
+    if (campaign.type === 'roundtable-interest') return 'Roundtables';
+    if (campaign.type === 'initiative-interest') return 'Initiatives';
+    return 'Site-wide';
+  }
+
+  function populateCampaignSelect() {
+    const select = document.getElementById('campaign-select');
+    const previousValue = select.value;
+    const groups = { 'Site-wide': [], Roundtables: [], Initiatives: [] };
+    state.campaigns.forEach((c) => { groups[campaignGroupLabel(c)].push(c); });
+
+    select.innerHTML = Object.entries(groups)
+      .filter(([, items]) => items.length)
+      .map(([label, items]) => `
+        <optgroup label="${escapeHtml(label)}">
+          ${items.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}${c.archived ? ' (archived)' : ''}</option>`).join('')}
+        </optgroup>
       `).join('');
+
+    const stillExists = state.campaigns.some((c) => c.id === previousValue);
+    select.value = stillExists ? previousValue : (state.campaigns[0] ? state.campaigns[0].id : '');
+  }
+
+  function selectedCampaign() {
+    const id = document.getElementById('campaign-select').value;
+    return state.campaigns.find((c) => c.id === id) || null;
+  }
+
+  // Everything that doesn't depend on the entries fetch — the entries
+  // themselves (and the entry count in the meta line) are rendered
+  // separately by renderCampaignEntriesTable, once loadCampaignEntries
+  // resolves.
+  function renderCampaignControls(campaign) {
+    const chairSession = isChairSession();
+    document.getElementById('campaign-detail-name').textContent = campaign ? campaign.name : '—';
+
+    const resultsEmailsField = document.getElementById('campaign-results-emails');
+    resultsEmailsField.value = campaign && Array.isArray(campaign.resultsEmails) ? campaign.resultsEmails.join(', ') : '';
+    resultsEmailsField.readOnly = chairSession;
+
+    document.getElementById('campaign-effective-emails').textContent = campaign
+      ? `Currently emails: ${(campaign.effectiveResultsEmails || []).join(', ') || '(no recipients configured)'}`
+      : '';
+
+    document.getElementById('campaign-results-emails-actions').style.display = chairSession ? 'none' : '';
+    document.getElementById('campaign-notify-on-entry').checked = !!(campaign && campaign.notifyOnEntry);
+    document.getElementById('campaign-archived-toggle').checked = !!(campaign && campaign.archived);
+
+    // "Opted in only" by default for interest campaigns, where the
+    // checkbox is a real choice the visitor made; "Everyone" for the
+    // site-wide ones, where consent is either not recorded at all
+    // (survey) or always true by construction (waitlist/newsletter — see
+    // routes/subscribers.js), so filtering on it wouldn't narrow anything.
+    document.getElementById('campaign-consent-filter').value =
+      campaign && INTEREST_TYPES.includes(campaign.type) ? 'yes' : 'all';
+  }
+
+  function filteredCampaignEntries(campaign) {
+    const wantsOptedInOnly = document.getElementById('campaign-consent-filter').value === 'yes';
+    if (!wantsOptedInOnly || campaign.id === 'survey') return state.campaignEntries;
+    return state.campaignEntries.filter((e) => e.consent);
+  }
+
+  function renderCampaignEntriesTable(campaign) {
+    const thead = document.getElementById('campaign-entries-head');
+    const tbody = document.getElementById('campaign-entries-rows');
+    document.getElementById('campaign-detail-meta').textContent = campaign
+      ? `${CAMPAIGN_TYPE_LABELS[campaign.type] || campaign.type} • ${state.campaignEntries.length} entries`
+      : '';
+
+    if (!campaign) {
+      thead.innerHTML = '';
+      tbody.innerHTML = '<tr><td class="muted">No campaign selected.</td></tr>';
+      return;
+    }
+
+    const isSurvey = campaign.id === 'survey';
+    const isWaitlist = campaign.id === 'waitlist';
+    const isInterest = INTEREST_TYPES.includes(campaign.type);
+
+    const columns = ['Email', 'Name', 'Consent'];
+    if (isInterest) columns.push('Message');
+    if (isWaitlist) columns.push('Phone', 'Address');
+    if (isSurvey) columns.push('Answers');
+    columns.push('Created');
+    thead.innerHTML = `<tr>${columns.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr>`;
+
+    const entries = filteredCampaignEntries(campaign);
+    if (!entries.length) {
+      tbody.innerHTML = `<tr><td colspan="${columns.length}" class="muted">No entries match these filters.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = entries.map((e) => {
+      const cells = [
+        escapeHtml(e.email || '—'),
+        escapeHtml(e.name || '—'),
+        isSurvey ? '—' : (e.consent ? 'Yes' : 'No'),
+      ];
+      if (isInterest) cells.push(escapeHtml(e.message || '—'));
+      if (isWaitlist) cells.push(escapeHtml(e.phone || '—'), escapeHtml(e.address || '—'));
+      if (isSurvey) cells.push(`<pre>${escapeHtml(JSON.stringify(e.answers, null, 2))}</pre>`);
+      cells.push(escapeHtml(e.createdAt || '—'));
+      return `<tr>${cells.map((c) => `<td>${c}</td>`).join('')}</tr>`;
+    }).join('');
+  }
+
+  async function loadCampaignEntries(campaign) {
+    if (!campaign) {
+      state.campaignEntries = [];
+      renderCampaignEntriesTable(null);
+      return;
+    }
+    document.getElementById('campaign-entries-rows').innerHTML = '<tr><td class="muted">Loading…</td></tr>';
+    try {
+      const { entries } = await api('/api/admin/campaigns/' + encodeURIComponent(campaign.id) + '/entries');
+      state.campaignEntries = entries;
+      renderCampaignEntriesTable(campaign);
     } catch (err) {
-      tbody.innerHTML = '<tr><td colspan="4" class="muted">Failed to load responses.</td></tr>';
+      document.getElementById('campaign-entries-rows').innerHTML = '<tr><td class="muted">Failed to load entries.</td></tr>';
       showToast(err.message, true);
     }
+  }
+
+  async function onCampaignSelected() {
+    const campaign = selectedCampaign();
+    renderCampaignControls(campaign);
+    await loadCampaignEntries(campaign);
+  }
+
+  async function loadCampaignsTab() {
+    await loadCurrentUser();
+    const chairSession = isChairSession();
+    document.getElementById('campaign-archived-field').style.display = chairSession ? 'none' : '';
+
+    const showArchived = !chairSession && document.getElementById('campaign-show-archived').checked;
+    try {
+      state.campaigns = await api('/api/admin/campaigns' + (showArchived ? '?archived=1' : ''));
+      populateCampaignSelect();
+      await onCampaignSelected();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function saveCampaignResultsEmails() {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    const emails = document.getElementById('campaign-results-emails').value.split(',').map((e) => e.trim()).filter(Boolean);
+    try {
+      const updated = await api('/api/admin/campaigns/' + encodeURIComponent(campaign.id), {
+        method: 'PATCH',
+        body: JSON.stringify({ resultsEmails: emails.length ? emails : null }),
+      });
+      Object.assign(campaign, updated);
+      renderCampaignControls(campaign);
+      showToast('Results emails updated.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function toggleCampaignField(field, checkboxId) {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    const value = document.getElementById(checkboxId).checked;
+    try {
+      const updated = await api('/api/admin/campaigns/' + encodeURIComponent(campaign.id), {
+        method: 'PATCH',
+        body: JSON.stringify({ [field]: value }),
+      });
+      // Archiving the currently-selected campaign while "Show archived" is
+      // off would otherwise leave it selected but no longer in the list it
+      // came from — reload the whole tab so the dropdown and selection
+      // land somewhere consistent.
+      if (field === 'archived' && value && !document.getElementById('campaign-show-archived').checked) {
+        await loadCampaignsTab();
+      } else {
+        Object.assign(campaign, updated);
+        renderCampaignControls(campaign);
+      }
+      showToast('Campaign updated.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  }
+
+  async function copyFilteredEmails() {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    const emails = [...new Set(
+      filteredCampaignEntries(campaign).map((e) => (e.email || '').trim().toLowerCase()).filter(Boolean)
+    )];
+    const text = emails.join(', ');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      showToast(`Copied ${emails.length} email${emails.length === 1 ? '' : 's'}.`);
+    } catch (err) {
+      showToast('Unable to copy emails.', true);
+    }
+  }
+
+  function initCampaignsTab() {
+    document.getElementById('campaign-select').addEventListener('change', onCampaignSelected);
+    document.getElementById('campaign-show-archived').addEventListener('change', loadCampaignsTab);
+    document.getElementById('campaign-consent-filter').addEventListener('change', () => renderCampaignEntriesTable(selectedCampaign()));
+    document.getElementById('campaign-save-results-emails-btn').addEventListener('click', saveCampaignResultsEmails);
+    document.getElementById('campaign-notify-on-entry').addEventListener('change', () => toggleCampaignField('notifyOnEntry', 'campaign-notify-on-entry'));
+    document.getElementById('campaign-archived-toggle').addEventListener('change', () => toggleCampaignField('archived', 'campaign-archived-toggle'));
+    document.getElementById('campaign-copy-emails-btn').addEventListener('click', copyFilteredEmails);
   }
 
   // --- Blog Posts ---
@@ -800,26 +1022,10 @@
   }
 
   // --- Settings ---
-
-  async function loadSettingsTab() {
-    try {
-      const settings = await api('/api/admin/settings');
-      document.getElementById('settings-notify-email').value = settings.notifyEmail || '';
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
-
-  async function saveNotifyEmail(event) {
-    event.preventDefault();
-    const email = document.getElementById('settings-notify-email').value.trim();
-    try {
-      await api('/api/admin/settings/notify-email', { method: 'PUT', body: JSON.stringify({ email }) });
-      showToast('Notification email updated.');
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  }
+  //
+  // Notification email used to live here, but it's per-campaign now (see
+  // the Campaigns tab's "Results emails" field) — this tab is just Change
+  // Password.
 
   async function savePassword(event) {
     event.preventDefault();
@@ -843,7 +1049,6 @@
   }
 
   function initSettingsTab() {
-    document.getElementById('notify-email-form').addEventListener('submit', saveNotifyEmail);
     document.getElementById('password-form').addEventListener('submit', savePassword);
   }
 
@@ -1141,6 +1346,7 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     initTabs();
+    initCampaignsTab();
     initPostsTab();
     initContentTab();
     initPressTab();
@@ -1148,6 +1354,6 @@
     initSettingsTab();
     initUsersTab();
     loadCurrentUser();
-    loadSurvey();
+    loadCampaignsTab();
   });
 })();

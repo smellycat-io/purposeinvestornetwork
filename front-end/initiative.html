@@ -31,6 +31,7 @@
   <script src="/component/card.js"></script>
   <script src="/component/banner.js"></script>
   <script src="/component/detail-page.js"></script>
+  <script src="/component/interest-form.js"></script>
   <script>
     renderDetailPage({
       contentElId: 'initiative-content',
@@ -38,7 +39,7 @@
       load: (slug) => Promise.all([
         fetchJson(`/api/initiatives/${encodeURIComponent(slug)}`),
         fetchJson('/api/roundtables').catch(() => []),
-      ]).then(([{ initiative, updates }, roundtables]) => ({ initiative, updates, roundtables })),
+      ]).then(([{ initiative, updates, interest }, roundtables]) => ({ initiative, updates, interest, roundtables })),
       pageTitle: (data) => `${data.initiative.title} | Purpose Investor Network`,
       mapBanner: ({ initiative, roundtables }) => {
         const parentRoundtables = roundtables.filter((r) => (initiative.roundtableIds || []).includes(r.id));
@@ -47,7 +48,7 @@
           : '';
         return { imageUrl: initiative.imageUrl, title: initiative.title, description: initiative.description, extraHtml: parentsHtml };
       },
-      renderBody: ({ updates }) => {
+      renderBody: ({ updates, interest }) => {
         const updatesHtml = updates.length
           ? updates.map((u) => updateCardHtml(u)).join('')
           : '<p class="muted">No updates have been posted yet.</p>';
@@ -56,7 +57,15 @@
             <h3>Updates</h3>
             <div class="update-list">${updatesHtml}</div>
           </section>
+
+          ${interestFormHtml({ formId: 'initiative-interest-form', consentText: interest.consentText })}
         `;
+      },
+      afterRender: () => {
+        initInterestForm({
+          formId: 'initiative-interest-form',
+          submitUrl: `/api/initiatives/${encodeURIComponent(lastPathSegment())}/interest`,
+        });
       },
       notFoundText: 'We couldn’t find that initiative. It may have been renamed or removed.',
       errorText: 'Unable to load this initiative right now. Please try again later.',

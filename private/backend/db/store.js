@@ -1,12 +1,15 @@
-// Local JSON-file fallback store for survey responses, analytics events, and
-// newsletter subscribers. Survey responses are always written here in
-// parallel with DynamoDB (see routes/survey-responses.js) so admin reads
-// still work if Dynamo isn't configured; analytics events and subscribers
-// only ever live here.
+// Local JSON-file fallback store for survey responses and analytics
+// events. Survey responses are always written here in parallel with
+// DynamoDB (see routes/survey-responses.js) so admin reads still work if
+// Dynamo isn't configured; analytics events only ever live here.
 //
-// Note: in Lambda this file lives at /tmp, which is wiped on cold start —
-// subscriber signups aren't guaranteed durable in production unless this
-// gets backed by DynamoDB too (same tradeoff survey responses already made).
+// Subscribers (newsletter/waitlist signups) used to live here too, but
+// moved to the Campaigns tables (db/campaigns.js) — this file's /tmp
+// storage is wiped on every Lambda cold start, which was a real durability
+// gap for something as consequential as a membership waitlist signup.
+//
+// Note: survey responses themselves still have this same gap — they're
+// not on this branch's scope to migrate (see docs/DATA-MODEL.md).
 const fs = require('fs');
 const { join } = require('path');
 
@@ -14,7 +17,7 @@ const dbFile =
   process.env.DB_FILE ||
   (process.env.LAMBDA_TASK_ROOT ? join('/tmp', 'survey-store.json') : join(__dirname, '..', 'survey.db'));
 
-const EMPTY_STORE = { surveyResponses: [], analyticsEvents: [], subscribers: [] };
+const EMPTY_STORE = { surveyResponses: [], analyticsEvents: [] };
 
 function loadStore() {
   if (dbFile === ':memory:') {
@@ -68,6 +71,12 @@ function saveSurveyResponseToStore(createdAt, email, payload, recordId) {
   return id;
 }
 
+// Used by db/campaigns.js's legacy-survey adapter to check for a matching
+// survey response by email (the waitlist-signup side of free-month
+// linking) when Dynamo isn't configured — the Dynamo-backed path does its
+// own equivalent client-side matching, for the same reason (survey emails
+// were never lowercased at save time, so an exact-match query would miss
+// a differently-cased stored value).
 function findSurveyResponseIdByEmail(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
@@ -80,51 +89,9 @@ function saveAnalyticsEventToStore(createdAt, event, properties, distinctId) {
   persistStore();
 }
 
-// Free-month tracking: a waitlist subscriber (source:'membership-waitlist')
-// who also completes the survey earns a free month. The two actions can
-// happen in either order, so both save paths check for the other:
-//   - saveSubscriberToStore checks for an existing survey response by email.
-//   - linkSurveyToWaitlistSubscriber (called after a survey save) checks for
-//     an existing waitlist subscriber by email.
-function saveSubscriberToStore(createdAt, email, source, details) {
-  const id = createStoreId();
-  const extra = details || {};
-  const resolvedSource = source || 'newsletter';
-  const existingSurveyId = resolvedSource === 'membership-waitlist' ? findSurveyResponseIdByEmail(email) : null;
-  store.subscribers.push({
-    id,
-    created_at: createdAt,
-    email,
-    source: resolvedSource,
-    name: extra.name || null,
-    phone: extra.phone || null,
-    address: extra.address || null,
-    surveyResponseId: existingSurveyId,
-    freeMonthEarned: !!existingSurveyId,
-  });
-  persistStore();
-  return id;
-}
-
-function linkSurveyToWaitlistSubscriber(email, surveyResponseId) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return false;
-  let linked = false;
-  store.subscribers.forEach((sub) => {
-    if (normalizeEmail(sub.email) === normalized && sub.source === 'membership-waitlist' && !sub.surveyResponseId) {
-      sub.surveyResponseId = surveyResponseId;
-      sub.freeMonthEarned = true;
-      linked = true;
-    }
-  });
-  if (linked) persistStore();
-  return linked;
-}
-
 module.exports = {
   store,
   saveSurveyResponseToStore,
   saveAnalyticsEventToStore,
-  saveSubscriberToStore,
-  linkSurveyToWaitlistSubscriber,
+  findSurveyResponseIdByEmail,
 };
