@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { captureException, captureMessage } = require('@sentry/aws-serverless');
 const { PutCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { s3Client, S3_BUCKET } = require('../shared/s3Client.js');
 const { dynamoDbDocClient, DYNAMODB_TABLE } = require('../db/dynamoClient.js');
@@ -36,7 +36,7 @@ async function listResponses() {
 
 router.get(
   '/api/admin/survey-responses',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
     res.json(await listResponses());
   }, 'Unable to load survey responses.')

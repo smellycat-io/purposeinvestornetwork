@@ -8,9 +8,7 @@ const router = express.Router();
 // land yet (the Member-facing area is not yet implemented; see
 // docs/DATA-MODEL.md) and login always redirects to /admin regardless of
 // role, so excluding Member here would break their post-login experience
-// outright rather than just limiting what they can do once there. Same
-// effective access as the flat requireAdmin this replaces — only the
-// middleware is now role-aware, not the actual gate.
+// outright rather than just limiting what they can do once there.
 router.get('/admin', requireRole('admin', 'chair', 'member'), (req, res) => {
   res.sendFile(join(__dirname, '..', 'admin/admin.html'));
 });
