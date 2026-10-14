@@ -11,7 +11,8 @@ serverless Express backend, content managed through an admin dashboard.
   questionnaire/survey.
 - **Admin dashboard** (`private/backend/admin/`) — staff-only content management for
   every content type above, plus user invites.
-- **Member area** — in progress; see `docs/DATA-MODEL.md`'s Role & Permission Model.
+- **Member area** (`private/backend/member/`) — a coming-soon page today; see
+  `docs/DATA-MODEL.md`'s Role & Permission Model for what's still to come.
 
 See `docs/ARCHITECTURE.md` for the full AWS stack, deploy flow, and staging setup. See
 `docs/DATA-MODEL.md` for the DynamoDB schema and API reference. See `.claude/CLAUDE.md`
@@ -38,8 +39,7 @@ npm start
 ```
 
 Serves the site at `http://localhost:3000`. Copy `.env.example` to `.env` and fill in
-values first — **note**: `.env.example` currently only covers session/admin-login and
-Sentry vars. Without the `AWS_<THING>_TABLE` vars (see `docs/DATA-MODEL.md`) pointing at
+values first. Without the `AWS_<THING>_TABLE` vars (see `docs/DATA-MODEL.md`) pointing at
 real DynamoDB tables, content routes (Roundtables, Posts, etc.) return empty rather than
 erroring, so the site will run but show no content locally unless those are set.
 
@@ -80,16 +80,21 @@ Admin-triggered password reset), Chair-scoped Member management, Chair write and
 access to their own Roundtable's Initiatives/Posts/Investments, Chair access to their
 own Roundtable's own fields and the shared image library, and role-aware gating on
 every content route (Roundtables, Press, Events, Images included) and the admin
-dashboard page itself. See `docs/DATA-MODEL.md`'s Role & Permission Model section for
-exactly how each role is scoped.
+dashboard page itself. A `/member` coming-soon page, with each role landing on its own
+home after login (Member → `/member`, Chair and Admin → `/admin`). Campaigns: durable
+results storage for the survey, newsletter, and membership waitlist, plus an always-on
+interest form on every Roundtable and Initiative page, with per-campaign results emails
+and copy-paste email lists in the admin dashboard. See `docs/DATA-MODEL.md`'s Role &
+Permission Model section for exactly how each role is scoped.
 
-**In progress**: the Member-facing area (a Member currently lands on the same admin
-dashboard as an Admin or Chair, just with a restricted Users tab) and role-aware
-`memberOnly` content visibility. See `docs/DATA-MODEL.md`'s "Not yet implemented" list
-at the end of the Role & Permission Model section — it also covers the admin dashboard
-*UI* not yet reflecting the role-aware backend outside the Users tab (every session
-still sees every tab; a Chair or Member just gets a failed-to-load toast where the
-backend now rejects or filters their request).
+**In progress**: the Member area is a coming-soon shell today — profile editing,
+education content, an events calendar, and a member news feed are still to come. The
+admin dashboard UI's role-awareness for Chair sessions isn't built yet either (every
+Chair session still sees every tab; where the backend now rejects or filters a Chair's
+request, they just get a failed-to-load toast, not a tab hidden outright). Role-aware
+`memberOnly` content visibility is also still open. See `docs/DATA-MODEL.md`'s "Not yet
+implemented" list at the end of the Role & Permission Model section for the full detail
+on both.
 
-**Known gaps**: `.env.example` doesn't list every env var the app actually reads (see
-Local development above).
+**Known gaps**: bulk email sending isn't built — Campaigns gives a copy-paste email
+list per campaign instead of sending from the dashboard directly.
