@@ -138,10 +138,10 @@ infra config, not `private/infra/*.yml` (`cloudfront.yml` excepted).
 Two layers, both CloudFront Functions (runtime `cloudfront-js-2.0`):
 
 1. **Clean-URL rewrite** (`cloudfront-static-routing.js`, attached to the default/
-   catch-all cache behavior — `/api/*`, `/admin*`, `/login` etc. are separate behaviors
-   that route straight to the Lambda origin and never reach this function). Rewrites by
-   URL *shape*, not a hardcoded content-type list, so a new content type following the
-   existing convention needs zero routing changes:
+   catch-all cache behavior — `/api/*`, `/admin*`, `/member`, `/login` etc. are separate
+   behaviors that route straight to the Lambda origin and never reach this function).
+   Rewrites by URL *shape*, not a hardcoded content-type list, so a new content type
+   following the existing convention needs zero routing changes:
    - `/<type>` → `/<type>.html` (list pages)
    - `/<type>/<slug>` → `/<type>-detail.html` (detail pages)
    - `/roundtables/initiatives/<slug>` → `/initiative.html` (one-off nesting)

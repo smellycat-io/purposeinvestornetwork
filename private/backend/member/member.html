@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Member Area | Purpose Investor Network</title>
+  <link rel="icon" href="/imgs/logos/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/nav.css" />
+</head>
+<body>
+  <div class="site-topbar" id="site-topbar"></div>
+  <script src="/nav.js"></script>
+  <script>renderBackendNav();</script>
+
+  <div class="page-shell">
+    <main>
+      <div class="page-heading">
+        <h2 id="member-welcome">Welcome</h2>
+        <p>The member area is coming soon.</p>
+      </div>
+
+      <section class="content-section">
+        <h3>What&rsquo;s planned</h3>
+        <ul class="benefits-list">
+          <li>Education library</li>
+          <li>Events calendar</li>
+          <li>Member news</li>
+          <li>Your profile</li>
+        </ul>
+      </section>
+
+      <section class="content-section">
+        <p><a href="/">Back to the public site</a></p>
+        <p><a href="/logout">Log out</a></p>
+      </section>
+    </main>
+
+    <footer class="footer">Purpose Investor Network &bull; Empowering purpose-driven investment journeys</footer>
+  </div>
+
+  <script>
+    fetch('/api/users/me', { credentials: 'same-origin' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me) => {
+        if (me && me.firstName) {
+          document.getElementById('member-welcome').textContent = 'Welcome, ' + me.firstName;
+        }
+      })
+      .catch(() => {});
+  </script>
+
+  <script src="/env.js"></script>
+  <script src="https://browser.sentry-cdn.com/8.55.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+  <script src="/sentry/sentry-browser.js"></script>
+  <script>initBrowserSentry('member');</script>
+  <script async defer data-domain="yourdomain.com" src="https://plausible.io/js/plausible.js"></script>
+</body>
+</html>

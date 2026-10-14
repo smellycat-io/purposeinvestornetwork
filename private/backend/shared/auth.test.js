@@ -1,4 +1,4 @@
-const { requireAdmin, requireRole, matchesRoundtable, roundtableArrayContains } = require('./auth.js');
+const { requireRole, roleHome, matchesRoundtable, roundtableArrayContains } = require('./auth.js');
 
 function mockRes() {
   const res = {};
@@ -8,31 +8,12 @@ function mockRes() {
   return res;
 }
 
-describe('requireAdmin', () => {
-  test('calls next when logged in', () => {
-    const req = { session: { loggedIn: true } };
-    const res = mockRes();
-    const next = jest.fn();
-
-    requireAdmin(req, res, next);
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(res.redirect).not.toHaveBeenCalled();
-  });
-
-  test('redirects to /login when there is no session', () => {
-    const req = { session: null };
-    const res = mockRes();
-    const next = jest.fn();
-
-    requireAdmin(req, res, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith('/login');
-  });
-});
-
 describe('requireRole', () => {
+  test('the returned guard is marked isRoleGate, for shared/routeRoleGates.test.js to recognize', () => {
+    expect(requireRole('admin').isRoleGate).toBe(true);
+  });
+
+
   test('calls next when logged in with an allowed role', () => {
     const req = { session: { loggedIn: true, role: 'chair' }, path: '/api/admin/users/invite' };
     const res = mockRes();
@@ -80,7 +61,10 @@ describe('requireRole', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Not authorized.' });
   });
 
-  test('redirects to /login on a page route when logged in with a disallowed role', () => {
+  // Not /login — a logged-in session with the wrong role would just get
+  // bounced straight back here by GET /login's own roleHome redirect,
+  // looping forever. roleHome(role) is the actual page it belongs on.
+  test("redirects to the role's own home, not /login, on a page route when logged in with a disallowed role", () => {
     const req = { session: { loggedIn: true, role: 'member' }, path: '/admin' };
     const res = mockRes();
     const next = jest.fn();
@@ -88,7 +72,25 @@ describe('requireRole', () => {
     requireRole('admin')(req, res, next);
 
     expect(next).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith('/login');
+    expect(res.redirect).toHaveBeenCalledWith('/member');
+  });
+});
+
+describe('roleHome', () => {
+  test("a Member's home is /member", () => {
+    expect(roleHome('member')).toBe('/member');
+  });
+
+  test("a Chair's home is /admin", () => {
+    expect(roleHome('chair')).toBe('/admin');
+  });
+
+  test("an Admin's home is /admin", () => {
+    expect(roleHome('admin')).toBe('/admin');
+  });
+
+  test('an unrecognized role falls back to /admin', () => {
+    expect(roleHome('not-a-real-role')).toBe('/admin');
   });
 });
 

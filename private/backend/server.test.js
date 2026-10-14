@@ -91,17 +91,17 @@ describe('GET /logout', () => {
   });
 });
 
-describe('requireAdmin-gated routes', () => {
+describe('role-gated routes', () => {
   test('GET /admin redirects to /login when logged out', async () => {
     const response = await request(app).get('/admin');
     expect(response.status).toBe(302);
     expect(response.headers.location).toBe('/login');
   });
 
-  test('GET /api/admin/survey-responses redirects to /login when logged out', async () => {
+  test('GET /api/admin/survey-responses returns JSON 401 when logged out', async () => {
     const response = await request(app).get('/api/admin/survey-responses');
-    expect(response.status).toBe(302);
-    expect(response.headers.location).toBe('/login');
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: 'Not logged in.' });
   });
 
   test('both routes succeed once logged in', async () => {

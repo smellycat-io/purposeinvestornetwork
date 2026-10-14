@@ -76,17 +76,20 @@ Full conventions (branch naming, commit style, pre-merge checklist) in
 Education, Investments, Events, Press/Updates), admin dashboard CRUD for all of the
 above, production + staging environments, Sentry/Plausible/PostHog integration.
 Admin/Chair/Member role differentiation: role-aware invites (with resend and an
-Admin-triggered password reset), Chair-scoped Member management, Chair write access to
-their own Roundtable's Initiatives/Posts/Investments, and a role-aware admin dashboard
-Users tab. See `docs/DATA-MODEL.md`'s Role & Permission Model section for exactly how
-each role is scoped.
+Admin-triggered password reset), Chair-scoped Member management, Chair write and read
+access to their own Roundtable's Initiatives/Posts/Investments, Chair access to their
+own Roundtable's own fields and the shared image library, and role-aware gating on
+every content route (Roundtables, Press, Events, Images included) and the admin
+dashboard page itself. See `docs/DATA-MODEL.md`'s Role & Permission Model section for
+exactly how each role is scoped.
 
 **In progress**: the Member-facing area (a Member currently lands on the same admin
 dashboard as an Admin or Chair, just with a restricted Users tab) and role-aware
 `memberOnly` content visibility. See `docs/DATA-MODEL.md`'s "Not yet implemented" list
-at the end of the Role & Permission Model section. Closing the remaining flat
-`requireAdmin` routes (Roundtables, Press, Events, Images, and the `GET` list/read
-endpoints on every resource) to role-aware access is also outstanding.
+at the end of the Role & Permission Model section — it also covers the admin dashboard
+*UI* not yet reflecting the role-aware backend outside the Users tab (every session
+still sees every tab; a Chair or Member just gets a failed-to-load toast where the
+backend now rejects or filters their request).
 
 **Known gaps**: `.env.example` doesn't list every env var the app actually reads (see
 Local development above).

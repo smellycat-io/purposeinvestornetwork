@@ -111,11 +111,13 @@ beforeEach(() => {
 
 const { app } = require('../index');
 
+// Doesn't assert the redirect target here — it varies by role (see
+// shared/auth.js's roleHome) and is covered by its own dedicated tests in
+// access-matrix.test.js ("Login redirects to each role's own home").
 async function loginAs(email) {
   const agent = request.agent(app);
   const res = await agent.post('/login').send({ email, password: PASSWORD });
   expect(res.status).toBe(302);
-  expect(res.headers.location).toBe('/admin');
   return agent;
 }
 
@@ -126,6 +128,54 @@ const memberA1 = makeUser({ id: 'member-a1', email: 'member-a1@example.com', rol
 function freshRoster() {
   return [admin1, chairA, memberA1];
 }
+
+describe('GET /api/admin/initiatives', () => {
+  test('Admin sees every Initiative', async () => {
+    seedUsers(freshRoster());
+    seedInitiatives([
+      makeInitiative({ id: 'init-a', roundtableIds: ['rt-A'] }),
+      makeInitiative({ id: 'init-b', roundtableIds: ['rt-B'] }),
+    ]);
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.get('/api/admin/initiatives');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((i) => i.id).sort()).toEqual(['init-a', 'init-b']);
+  });
+
+  test('a Chair sees only Initiatives whose roundtableIds includes their own Roundtable', async () => {
+    seedUsers(freshRoster());
+    seedInitiatives([
+      makeInitiative({ id: 'init-a', roundtableIds: ['rt-A'] }),
+      makeInitiative({ id: 'init-ab', roundtableIds: ['rt-A', 'rt-B'] }),
+      makeInitiative({ id: 'init-b', roundtableIds: ['rt-B'] }),
+    ]);
+    const agent = await loginAs('chair-a@example.com');
+
+    const res = await agent.get('/api/admin/initiatives');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((i) => i.id).sort()).toEqual(['init-a', 'init-ab']);
+  });
+
+  test('a Member is not authorized — 403', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.get('/api/admin/initiatives');
+
+    expect(res.status).toBe(403);
+  });
+
+  test('a logged-out request is rejected', async () => {
+    seedUsers(freshRoster());
+
+    const res = await request(app).get('/api/admin/initiatives');
+
+    expect(res.status).toBe(401);
+  });
+});
 
 describe('POST /api/admin/initiatives', () => {
   test('Admin can create with any roundtableIds', async () => {

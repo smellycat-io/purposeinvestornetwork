@@ -3,12 +3,13 @@ const { captureException, captureMessage } = require('@sentry/aws-serverless');
 const config = require('../shared/config.js');
 const { verifyPassword } = require('../shared/passwords.js');
 const { findUserByEmail } = require('../db/users.js');
+const { roleHome } = require('../shared/auth.js');
 
 const router = Router();
 
 router.get('/login', (req, res) => {
   if (req.session && req.session.loggedIn) {
-    return res.redirect('/admin');
+    return res.redirect(roleHome(req.session.role));
   }
 
   res.send(`
@@ -89,7 +90,7 @@ router.post('/login', async (req, res) => {
         req.session.roundtableId = null;
       }
       captureMessage(`Admin login succeeded — email: "${email}", checked against: ${checkedAgainst}`, 'info');
-      return res.redirect('/admin');
+      return res.redirect(roleHome(req.session.role));
     }
 
     captureMessage(`Admin login failed — email: "${email}", checked against: ${checkedAgainst}`, 'warning');

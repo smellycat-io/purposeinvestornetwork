@@ -127,11 +127,13 @@ beforeEach(() => {
 
 const { app } = require('../index');
 
+// Doesn't assert the redirect target here — it varies by role (see
+// shared/auth.js's roleHome) and is covered by its own dedicated tests in
+// access-matrix.test.js ("Login redirects to each role's own home").
 async function loginAs(email) {
   const agent = request.agent(app);
   const res = await agent.post('/login').send({ email, password: PASSWORD });
   expect(res.status).toBe(302);
-  expect(res.headers.location).toBe('/admin');
   return agent;
 }
 
@@ -142,6 +144,59 @@ const memberA1 = makeUser({ id: 'member-a1', email: 'member-a1@example.com', rol
 function freshRoster() {
   return [admin1, chairA, memberA1];
 }
+
+describe('GET /api/admin/posts', () => {
+  test('Admin sees every Post, including non-update types', async () => {
+    seedUsers(freshRoster());
+    seedInitiatives([makeInitiative({ id: 'init-a', roundtableIds: ['rt-A'] })]);
+    seedPosts([
+      makePost({ id: 'post-update-a', type: 'update', initiativeId: 'init-a' }),
+      makePost({ id: 'post-blog', type: 'blog' }),
+    ]);
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.get('/api/admin/posts');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((p) => p.id).sort()).toEqual(['post-blog', 'post-update-a']);
+  });
+
+  test("a Chair sees only 'update' Posts on an Initiative in their own Roundtable's scope", async () => {
+    seedUsers(freshRoster());
+    seedInitiatives([
+      makeInitiative({ id: 'init-a', roundtableIds: ['rt-A'] }),
+      makeInitiative({ id: 'init-b', roundtableIds: ['rt-B'] }),
+    ]);
+    seedPosts([
+      makePost({ id: 'post-update-a', type: 'update', initiativeId: 'init-a' }),
+      makePost({ id: 'post-update-b', type: 'update', initiativeId: 'init-b' }),
+      makePost({ id: 'post-blog', type: 'blog' }),
+    ]);
+    const agent = await loginAs('chair-a@example.com');
+
+    const res = await agent.get('/api/admin/posts');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((p) => p.id)).toEqual(['post-update-a']);
+  });
+
+  test('a Member is not authorized — 403', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.get('/api/admin/posts');
+
+    expect(res.status).toBe(403);
+  });
+
+  test('a logged-out request is rejected', async () => {
+    seedUsers(freshRoster());
+
+    const res = await request(app).get('/api/admin/posts');
+
+    expect(res.status).toBe(401);
+  });
+});
 
 describe('POST /api/admin/posts', () => {
   test('Admin can create any post type', async () => {

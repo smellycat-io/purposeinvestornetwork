@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { sendNotification } = require('../shared/email.js');
 const { store, saveSubscriberToStore } = require('../db/store.js');
@@ -43,7 +43,7 @@ router.post('/api/subscribe', asyncRoute(async (req, res) => {
   res.status(201).json({ success: true });
 }, 'Unable to save your email right now.'));
 
-router.get('/api/admin/subscribers', requireAdmin, asyncRoute(async (req, res) => {
+router.get('/api/admin/subscribers', requireRole('admin', 'chair'), asyncRoute(async (req, res) => {
   res.json(store.subscribers.slice().sort((a, b) => b.id - a.id));
 }, 'Unable to load subscribers.'));
 

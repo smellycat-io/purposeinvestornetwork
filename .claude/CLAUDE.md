@@ -18,9 +18,8 @@ framework — plain HTML/CSS/JS pages sharing a `shared/` component library.
   Press, Investments, Events, Images, Users), not a single-table design. See
   `docs/DATA-MODEL.md` for schema and the table-name env vars.
 - **Auth**: `express-session` + a Users table (email/password, invite links, password
-  reset). No third-party auth provider. Currently flat — anyone with a valid session is
-  treated as an admin (`req.session.loggedIn`); role differentiation (Admin/Chair/Member)
-  is in progress, see `docs/DATA-MODEL.md`.
+  reset). No third-party auth provider. Every protected route is role-gated
+  (Admin/Chair/Member via `req.session.role`), see `docs/DATA-MODEL.md`.
 - **Monitoring**: Sentry (`@sentry/aws-serverless`), Plausible + PostHog analytics.
 
 See `docs/ARCHITECTURE.md` for the AWS stack, deploy flow, staging setup, and known
@@ -44,7 +43,7 @@ private/
                         # sessions.js, settings.js, store.js, dynamoClient.js
     routes/            # one file per resource, matching db/ where it exists
                         # (roundtables.js, initiatives.js, users.js, auth.js, ...)
-    shared/             # cross-cutting helpers: auth.js (requireAdmin), access.js
+    shared/             # cross-cutting helpers: auth.js (requireRole), access.js
                         # (memberOnly gating), asyncRoute.js, config.js, email.js,
                         # passwords.js, s3Client.js, sanitizeHtml.js
     admin/              # admin dashboard UI (html/css/js) — separate from front-end/
@@ -111,13 +110,17 @@ generate, hash for storage, compare with `crypto.timingSafeEqual`.
 
 `req.session.loggedIn` marks any authenticated session; `req.session.role` and
 `req.session.roundtableId` (set at login in `routes/auth.js`) carry the Admin/Chair/
-Member distinction on top of it. `shared/auth.js` exposes both `requireAdmin` (flat —
-checks only `loggedIn`, no role distinction) and `requireRole(...roles)` (checks
-`req.session.role` against an allowlist; JSON 401/403 for `/api/*` routes, a redirect
-for page routes). Not every route is migrated to `requireRole` yet — see
-`docs/DATA-MODEL.md`'s API Endpoints table for exactly which ones are. A new role-aware
-route should use `requireRole`, not a bespoke check; don't scatter role logic inline in
-route handlers — centralize it in `shared/auth.js` the way both middlewares already are.
+Member distinction on top of it. Every protected route names its allowed roles
+explicitly through `shared/auth.js`'s `requireRole(...roles)` (checks
+`req.session.role` against an allowlist; JSON 401/403 for `/api/*` routes) — there is
+no flat, login-only gate left in this codebase. For page routes, no session redirects
+to `/login`; a session with the wrong role redirects to `roleHome(role)` instead
+(`/member` for Member, `/admin` for Admin/Chair) — never back to `/login`, which would
+just bounce it straight back. Login itself redirects to `roleHome(role)` the same way.
+A new `/api/admin`, `/admin`, or `/member` route with no `requireRole` call is a bug:
+`shared/routeRoleGates.test.js` walks the live Express router and fails the build if
+one ever appears un-gated. Don't scatter role logic inline in route handlers —
+centralize it in `shared/auth.js` the way `requireRole` already is.
 
 **The bootstrap `ADMIN_USER`/`ADMIN_PASS` login must stay reachable and functional
 independent of the Users table, DynamoDB, or any GSI's health.** It's the
@@ -142,7 +145,7 @@ for expected failures (400s, 404s). **Every new route goes through `asyncRoute`,
 bare async handler.** Pass `{ verbose: true }` as the third argument to fold the raw
 `error.message` into the 500 response as `detail`, on top of the Sentry report every
 route already gets — but only for a route reachable after authenticating (behind
-`requireAdmin`/`requireRole`). Never pass it on a public route (accept-invite,
+`requireRole`). Never pass it on a public route (accept-invite,
 forgot/reset-password, subscribe, survey): an unauthenticated caller could otherwise
 use a 500's detail to probe internals a generic message deliberately hides.
 

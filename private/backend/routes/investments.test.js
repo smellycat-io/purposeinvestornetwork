@@ -110,11 +110,13 @@ beforeEach(() => {
 
 const { app } = require('../index');
 
+// Doesn't assert the redirect target here — it varies by role (see
+// shared/auth.js's roleHome) and is covered by its own dedicated tests in
+// access-matrix.test.js ("Login redirects to each role's own home").
 async function loginAs(email) {
   const agent = request.agent(app);
   const res = await agent.post('/login').send({ email, password: PASSWORD });
   expect(res.status).toBe(302);
-  expect(res.headers.location).toBe('/admin');
   return agent;
 }
 
@@ -125,6 +127,53 @@ const memberA1 = makeUser({ id: 'member-a1', email: 'member-a1@example.com', rol
 function freshRoster() {
   return [admin1, chairA, memberA1];
 }
+
+describe('GET /api/admin/investments', () => {
+  test('Admin sees every Investment', async () => {
+    seedUsers(freshRoster());
+    seedInvestments([
+      makeInvestment({ id: 'inv-a', roundtableIds: ['rt-A'] }),
+      makeInvestment({ id: 'inv-b', roundtableIds: ['rt-B'] }),
+    ]);
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.get('/api/admin/investments');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((i) => i.id).sort()).toEqual(['inv-a', 'inv-b']);
+  });
+
+  test('a Chair sees only Investments whose roundtableIds includes their own Roundtable', async () => {
+    seedUsers(freshRoster());
+    seedInvestments([
+      makeInvestment({ id: 'inv-a', roundtableIds: ['rt-A'] }),
+      makeInvestment({ id: 'inv-b', roundtableIds: ['rt-B'] }),
+    ]);
+    const agent = await loginAs('chair-a@example.com');
+
+    const res = await agent.get('/api/admin/investments');
+
+    expect(res.status).toBe(200);
+    expect(res.body.map((i) => i.id)).toEqual(['inv-a']);
+  });
+
+  test('a Member is not authorized — 403', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.get('/api/admin/investments');
+
+    expect(res.status).toBe(403);
+  });
+
+  test('a logged-out request is rejected', async () => {
+    seedUsers(freshRoster());
+
+    const res = await request(app).get('/api/admin/investments');
+
+    expect(res.status).toBe(401);
+  });
+});
 
 describe('POST /api/admin/investments', () => {
   test('Admin can create with any roundtableIds', async () => {
