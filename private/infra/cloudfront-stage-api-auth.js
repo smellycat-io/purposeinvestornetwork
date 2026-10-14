@@ -1,6 +1,6 @@
 // CloudFront Function (runtime cloudfront-js-2.0) for the STAGE distribution's
-// Lambda-routed cache behaviors (/login, /admin, /admin/*, /api/*, /env.js,
-// /sentry-test). Basic Auth only — no URL rewriting needed here since these
+// Lambda-routed cache behaviors (/login, /admin, /admin/*, /member, /api/*,
+// /env.js, /sentry-test). Basic Auth only — no URL rewriting needed here since these
 // paths already go straight to the Lambda origin. Kept as a separate function
 // from cloudfront-stage-static-routing-auth.js so the rewrite logic there
 // never runs against API paths.

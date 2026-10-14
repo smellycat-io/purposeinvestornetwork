@@ -1,7 +1,8 @@
 // CloudFront Function (runtime cloudfront-js-2.0), attached to the default
 // (catch-all) cache behavior's viewer-request event — i.e. only requests
 // that don't already match a more specific behavior (/api/*, /admin*,
-// /login, etc., which go straight to the Lambda origin) ever reach this.
+// /member, /login, etc., which go straight to the Lambda origin) ever
+// reach this.
 //
 // Rewrites clean content URLs onto the actual static file in the S3
 // origin, since S3 has no concept of "serve this file for any slug":

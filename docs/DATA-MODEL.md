@@ -169,12 +169,12 @@ default in-memory session store would bounce an already-logged-in admin back to
 
 ## API Endpoints
 
-Every content and Users route under `/api/admin/*`, plus the `/admin` dashboard page
-and its static assets, uses the role-aware `requireRole` middleware — see Role &
-Permission Model below for exactly which roles reach which endpoint and how Chair
-access is scoped. `shared/routeRoleGates.test.js` walks the live Express router and
-fails the build if any `/api/admin/*` or `/admin` route is ever added without a
-`requireRole` call.
+Every content and Users route under `/api/admin/*`, plus the `/admin` dashboard page,
+its static assets, and the `/member` page, uses the role-aware `requireRole`
+middleware — see Role & Permission Model below for exactly which roles reach which
+endpoint and how Chair access is scoped. `shared/routeRoleGates.test.js` walks the
+live Express router and fails the build if any `/api/admin/*`, `/admin`, or `/member`
+route is ever added without a `requireRole` call.
 
 | Resource | Public | Admin / role-gated |
 |---|---|---|
@@ -189,7 +189,7 @@ fails the build if any `/api/admin/*` or `/admin` route is ever added without a
 | Survey responses | `POST /api/survey` | `GET /api/admin/survey-responses` — Admin or Chair, unscoped |
 | Subscribers | `POST /api/subscribe` | `GET /api/admin/subscribers` — Admin or Chair, unscoped |
 | Settings | — | `GET /api/admin/settings`, `PUT /api/admin/settings/notify-email` — Admin only; `PUT /api/admin/settings/password` — any logged-in role (self-service password change) |
-| Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) — any logged-in role |
+| Auth | `GET/POST /login`, `GET /logout` | `GET /admin` (dashboard page) — Admin or Chair; `GET /member` (member coming-soon page) — any logged-in role, Admin/Chair as a preview |
 
 ## Role & Permission Model
 
@@ -211,16 +211,23 @@ defaulting rules):
 field, so a missing `role` defaults to `admin` both here and in `createInvite` —
 existing PIN staff keep working without a migration step. The bootstrap
 `ADMIN_USER`/`ADMIN_PASS` env-var login path (no Users-table record at all) is also
-always treated as `admin`. Login always redirects to `/admin` regardless of role; there
-is no role-based redirect or role-aware UI in the admin dashboard today (see "Not yet
-implemented" below).
+always treated as `admin`.
+
+**Role homes (`shared/auth.js`'s `roleHome(role)`).** Login redirects to each role's
+own home instead of a single shared landing page: a Member goes to `/member`, an Admin
+or Chair goes to `/admin` (there's no distinct Chair-facing dashboard yet — see "Not yet
+implemented" below). `GET /login` for an already-logged-in session redirects the same
+way, and `requireRole` redirects a logged-in session with the wrong role to its
+`roleHome` rather than back to `/login` (which would just bounce it straight back) —
+see the `requireRole` bullet below.
 
 **Auth middleware (`shared/auth.js`).** Every admin/content route uses the role-aware
 `requireRole`:
 - `requireRole(...roles)` — checks `req.session.role` is one of the listed roles, and
-  that a session exists at all. Returns JSON 401 (not logged in) or 403 (wrong role)
-  for `/api/*` routes, and redirects to `/login` for page routes, since a role-gated
-  `fetch()` call needs a real error to branch on.
+  that a session exists at all. For `/api/*` routes, returns JSON 401 (not logged in)
+  or 403 (wrong role), since a role-gated `fetch()` call needs a real error to branch
+  on. For page routes, no session redirects to `/login`; a session with the wrong role
+  redirects to `roleHome(role)` instead.
 - `roundtableArrayContains(roundtableIds, chairRoundtableId)` — array-contains check (an
   item's `roundtableIds`, or a Member's, can include several Roundtables; a Chair
   matches if their one Roundtable is among them). Used by the Users routes below and by
@@ -368,13 +375,14 @@ field in the schema at all (see the Events table above), so there's nothing for 
 Chair's access to scope against without a schema change.
 
 **Not yet implemented:**
-- A Member-facing area (e.g. `front-end/member/`, distinct from the public `front-end/`
-  pages and the admin dashboard in `private/backend/admin/`): profile (would reuse
-  `PATCH /api/users/me` above), education content, an events calendar, and a member
-  news feed (`update`-type Posts via `listPostsForRoundtable`, filtered to a Member's
-  `roundtableIds`; a Member with an empty `roundtableIds` would see `announcement`-type
-  Posts only, not a blank feed). Today every logged-in session lands on the same
-  `/admin` dashboard regardless of role.
+- The real Member-facing area. `GET /member` (`private/backend/member/member.html`,
+  distinct from the public `front-end/` pages and the admin dashboard in
+  `private/backend/admin/`) is a coming-soon shell today — a welcome message and a list
+  of what's planned, nothing interactive. The actual features still to build: profile
+  editing (would reuse `PATCH /api/users/me` above), education content, an events
+  calendar, and a member news feed (`update`-type Posts via `listPostsForRoundtable`,
+  filtered to a Member's `roundtableIds`; a Member with an empty `roundtableIds` would
+  see `announcement`-type Posts only, not a blank feed).
 - Role-aware member-content visibility: `shared/access.js`'s `canSeeFull` still always
   returns `false`, so on the public `GET /api/education[/:slug]`, `GET
   /api/investments[/:slug]`, and `GET /api/events[/:slug]` endpoints, no visitor —
@@ -384,7 +392,8 @@ Chair's access to scope against without a schema change.
 - A role-aware admin dashboard UI: every backend route is now correctly role-gated and
   Chair-scoped (see above), but `private/backend/admin/admin.js` itself still shows the
   same tabs and unfiltered forms to every session regardless of role, outside the Users
-  tab. A Chair or Member currently sees every tab (Press, Events, Settings included)
-  and, where the backend now rejects or filters their request, only a generic failed-to-
-  load toast — not a tab hidden outright or a form pre-scoped to what they're actually
-  authorized to touch.
+  tab. A Chair currently sees every tab (Press, Events, Settings included) and, where
+  the backend now rejects or filters their request, only a generic failed-to-load toast
+  — not a tab hidden outright or a form pre-scoped to what they're actually authorized
+  to touch. (A Member no longer reaches this dashboard at all — see `GET /member`
+  above.)

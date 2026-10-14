@@ -110,11 +110,13 @@ beforeEach(() => {
 
 const { app } = require('../index');
 
+// Doesn't assert the redirect target here — it varies by role (see
+// shared/auth.js's roleHome) and is covered by its own dedicated tests in
+// access-matrix.test.js ("Login redirects to each role's own home").
 async function loginAs(email) {
   const agent = request.agent(app);
   const res = await agent.post('/login').send({ email, password: PASSWORD });
   expect(res.status).toBe(302);
-  expect(res.headers.location).toBe('/admin');
   return agent;
 }
 

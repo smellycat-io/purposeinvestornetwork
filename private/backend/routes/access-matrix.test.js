@@ -47,6 +47,7 @@ const {
   DeleteCommand,
 } = require('@aws-sdk/lib-dynamodb');
 const { hashPassword } = require('../shared/passwords.js');
+const { roleHome } = require('../shared/auth.js');
 
 const ddbMock = mockClient(DynamoDBDocumentClient);
 
@@ -110,11 +111,13 @@ beforeEach(() => {
 
 const { app } = require('../index');
 
+// Doesn't assert the redirect target here — it varies by role (see
+// shared/auth.js's roleHome) and is covered by its own dedicated tests
+// below ("POST /login redirects to each role's own home").
 async function loginAs(email) {
   const agent = request.agent(app);
   const res = await agent.post('/login').send({ email, password: PASSWORD });
   expect(res.status).toBe(302);
-  expect(res.headers.location).toBe('/admin');
   return agent;
 }
 
@@ -309,7 +312,7 @@ describe('Images — Admin and Chair, Member excluded', () => {
   });
 });
 
-describe('GET /admin (dashboard page) — any logged-in role, no Member area yet', () => {
+describe('GET /admin (dashboard page) — Admin or Chair, Member sent to its own home', () => {
   test('Admin reaches the page', async () => {
     seedUsers(freshRoster());
     const agent = await loginAs('admin@example.com');
@@ -328,13 +331,24 @@ describe('GET /admin (dashboard page) — any logged-in role, no Member area yet
     expect(res.status).toBe(200);
   });
 
-  test('a Member reaches the page — no Member-facing area exists yet to send them to instead', async () => {
+  test('a Member is redirected to /member, not shown the dashboard', async () => {
     seedUsers(freshRoster());
     const agent = await loginAs('member-a1@example.com');
 
     const res = await agent.get('/admin');
 
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/member');
+  });
+
+  test('a Member requesting /admin ends up on the real /member page within two redirect hops, not a loop', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.get('/admin').redirects(2);
+
     expect(res.status).toBe(200);
+    expect(res.redirects).toEqual([expect.stringContaining('/member')]);
   });
 
   test('a logged-out request is redirected to /login', async () => {
@@ -344,6 +358,80 @@ describe('GET /admin (dashboard page) — any logged-in role, no Member area yet
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/login');
+  });
+});
+
+describe('GET /member (member coming-soon page) — any logged-in role, Admin/Chair as a preview', () => {
+  test('a Member reaches the page', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.get('/member');
+
+    expect(res.status).toBe(200);
+  });
+
+  test('a Chair can preview the page', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('chair-a@example.com');
+
+    const res = await agent.get('/member');
+
+    expect(res.status).toBe(200);
+  });
+
+  test('an Admin can preview the page', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.get('/member');
+
+    expect(res.status).toBe(200);
+  });
+
+  test('a logged-out request is redirected to /login', async () => {
+    seedUsers(freshRoster());
+
+    const res = await request(app).get('/member');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/login');
+  });
+});
+
+describe('Login redirects to each role\'s own home', () => {
+  test.each([
+    ['admin@example.com', 'admin', '/admin'],
+    ['chair-a@example.com', 'chair', '/admin'],
+    ['member-a1@example.com', 'member', '/member'],
+  ])('POST /login for a %s (role: %s) redirects to %s', async (email, role, expectedLocation) => {
+    seedUsers(freshRoster());
+    expect(roleHome(role)).toBe(expectedLocation);
+
+    const res = await request(app).post('/login').send({ email, password: PASSWORD });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(expectedLocation);
+  });
+
+  test('GET /login for an already-logged-in Member redirects to /member, not /admin', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.get('/login');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/member');
+  });
+
+  test('GET /login for an already-logged-in Admin redirects to /admin', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.get('/login');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/admin');
   });
 });
 
