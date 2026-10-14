@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin, requireRole, roundtableArrayContains } = require('../shared/auth.js');
+const { requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { redactPost } = require('../shared/access.js');
 const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
@@ -85,11 +85,26 @@ router.get(
   }, 'Unable to load update.')
 );
 
+// Admin sees every Post. A Chair only ever has write access to
+// 'update'-type Posts on an Initiative in their scope (see
+// isPostInChairScope below), so their list view is scoped the same way —
+// resolved with one listInitiatives() call rather than isPostInChairScope
+// per post, since that helper's own per-post getInitiativeById would mean
+// a full Initiatives scan per post in the list.
 router.get(
   '/api/admin/posts',
-  requireAdmin,
+  requireRole('admin', 'chair'),
   asyncRoute(async (req, res) => {
-    res.json(await content.listPosts(req.query.type ? { type: req.query.type } : {}));
+    const all = await content.listPosts(req.query.type ? { type: req.query.type } : {});
+    if (req.session.role !== 'chair') return res.json(all);
+
+    const initiatives = await content.listInitiatives();
+    const inScopeInitiativeIds = new Set(
+      initiatives
+        .filter((i) => roundtableArrayContains(i.roundtableIds, req.session.roundtableId))
+        .map((i) => i.id)
+    );
+    res.json(all.filter((p) => p.type === 'update' && inScopeInitiativeIds.has(p.initiativeId)));
   }, 'Unable to load posts.')
 );
 

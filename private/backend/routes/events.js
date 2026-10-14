@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { filterVisible, canSeeFull } = require('../shared/access.js');
 const { sanitizeRichText } = require('../shared/sanitizeHtml.js');
@@ -29,9 +29,12 @@ router.get(
   }, 'Unable to load event.')
 );
 
+// Admin-only throughout — Events carry no Roundtable field in the current
+// schema (see docs/DATA-MODEL.md), so there's nothing for a Chair's access
+// to scope against.
 router.get(
   '/api/admin/events',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     res.json(await content.listEvents());
   }, 'Unable to load events.')
@@ -39,7 +42,7 @@ router.get(
 
 router.post(
   '/api/admin/events',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     const payload = { ...req.body, description: sanitizeRichText(req.body.description) };
     const event = await content.createEvent(payload);
@@ -50,7 +53,7 @@ router.post(
 
 router.put(
   '/api/admin/events/:id',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     const updates = { ...req.body };
     if (updates.description) updates.description = sanitizeRichText(updates.description);
@@ -66,7 +69,7 @@ router.put(
 
 router.delete(
   '/api/admin/events/:id',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     await content.deleteEvent(req.params.id);
     captureMessage(`Event deleted — id: ${req.params.id}`, 'info');

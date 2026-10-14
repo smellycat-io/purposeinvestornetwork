@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { captureMessage } = require('@sentry/aws-serverless');
 const content = require('../db/content.js');
-const { requireAdmin } = require('../shared/auth.js');
+const { requireRole } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 
 const router = Router();
@@ -13,12 +13,14 @@ router.get(
   }, 'Unable to load press mentions.')
 );
 
-// Admin read is identical to the public read (Press is never gated), but
-// kept as its own endpoint for consistency with every other content type's
-// admin dashboard wiring.
+// Admin-only, no Chair path — Press is org-wide third-party media
+// coverage with no Roundtable concept to scope against, unlike
+// Initiatives/Posts/Investments. Admin read is identical to the public
+// read (Press is never gated), but kept as its own endpoint for
+// consistency with every other content type's admin dashboard wiring.
 router.get(
   '/api/admin/press',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     res.json(await content.listPress());
   }, 'Unable to load press mentions.')
@@ -26,7 +28,7 @@ router.get(
 
 router.post(
   '/api/admin/press',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     const press = await content.createPress(req.body);
     captureMessage(`Press mention created — id: ${press.id}, title: "${press.title}"`, 'info');
@@ -36,7 +38,7 @@ router.post(
 
 router.put(
   '/api/admin/press/:id',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     const press = await content.updatePress(req.params.id, req.body);
     if (!press) {
@@ -50,7 +52,7 @@ router.put(
 
 router.delete(
   '/api/admin/press/:id',
-  requireAdmin,
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     await content.deletePress(req.params.id);
     captureMessage(`Press mention deleted — id: ${req.params.id}`, 'info');
