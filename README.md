@@ -83,7 +83,9 @@ every content route (Roundtables, Press, Events, Images included) and the admin
 dashboard page itself, including the dashboard UI itself: a Chair sees only the tabs
 and controls they can use (no Press, no Events, no unfiltered Roundtable/Initiative/
 Investment forms), so a Chair session no longer hits a failed-to-load toast for
-something the backend was always going to reject. A `/member` coming-soon page, with
+something the backend was always going to reject. A My Profile section in the admin
+dashboard's Settings tab lets an Admin or Chair edit their own name/phone/address,
+validated server-side. A `/member` coming-soon page, with
 each role landing on its own home after login (Member → `/member`, Chair and Admin →
 `/admin`). Campaigns: durable results storage for the survey, newsletter, and
 membership waitlist, plus an always-on interest form on every Roundtable and Initiative

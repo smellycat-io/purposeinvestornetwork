@@ -298,6 +298,29 @@ describe('PATCH /api/admin/users/:id', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/roundtableId/);
   });
+
+  // Same shared/profileFields.js helper PATCH /api/users/me uses — these
+  // just confirm it's actually wired in here too, not re-testing every rule
+  // already covered by profileFields.test.js.
+  test('an empty first name is rejected — 400, same message as the self-edit route', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.patch('/api/admin/users/member-b1').send({ firstName: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('First name is required.');
+  });
+
+  test('an over-long address is rejected — 400', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('admin@example.com');
+
+    const res = await agent.patch('/api/admin/users/member-b1').send({ address: 'a'.repeat(301) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Address must be 300 characters or fewer.');
+  });
 });
 
 describe('DELETE /api/admin/users/:id', () => {
@@ -403,6 +426,89 @@ describe('PATCH /api/users/me', () => {
     expect(res.body.user.firstName).toBe('ChairRenamed');
     expect(res.body.user.role).toBe('chair');
     expect(res.body.user.roundtableId).toBe('rt-A');
+  });
+
+  test.each([
+    ['admin', 'admin@example.com'],
+    ['chair', 'chair-a@example.com'],
+    ['member', 'member-a1@example.com'],
+  ])('a valid edit persists for a %s session', async (_role, email) => {
+    seedUsers(freshRoster());
+    const agent = await loginAs(email);
+
+    const res = await agent.patch('/api/users/me').send({ firstName: 'Updated', phone: '555-0199' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.firstName).toBe('Updated');
+    expect(res.body.user.phone).toBe('555-0199');
+  });
+
+  test.each([
+    ['admin', 'admin@example.com'],
+    ['chair', 'chair-a@example.com'],
+    ['member', 'member-a1@example.com'],
+  ])('an empty first name is rejected for a %s session', async (_role, email) => {
+    seedUsers(freshRoster());
+    const agent = await loginAs(email);
+
+    const res = await agent.patch('/api/users/me').send({ firstName: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('First name is required.');
+  });
+
+  test.each([
+    ['admin', 'admin@example.com'],
+    ['chair', 'chair-a@example.com'],
+    ['member', 'member-a1@example.com'],
+  ])('an over-long address is rejected for a %s session', async (_role, email) => {
+    seedUsers(freshRoster());
+    const agent = await loginAs(email);
+
+    const res = await agent.patch('/api/users/me').send({ address: 'a'.repeat(301) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Address must be 300 characters or fewer.');
+  });
+
+  test('a non-string phone is rejected', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.patch('/api/users/me').send({ phone: 5550100 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Phone must be text.');
+  });
+
+  test('a blank phone is stored as null, not rejected', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.patch('/api/users/me').send({ phone: '' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.phone).toBeNull();
+  });
+
+  test('a rejected edit does not persist any field from the same request', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAs('member-a1@example.com');
+
+    const res = await agent.patch('/api/users/me').send({ firstName: 'ShouldNotSave', lastName: '' });
+
+    expect(res.status).toBe(400);
+    expect(usersTable.find((u) => u.id === 'member-a1').firstName).toBe('Test');
+  });
+
+  test('the bootstrap session gets 404 — no profile record to update', async () => {
+    seedUsers(freshRoster());
+    const agent = await loginAsBootstrap();
+
+    const res = await agent.patch('/api/users/me').send({ firstName: 'X' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('No profile to update for this session.');
   });
 });
 

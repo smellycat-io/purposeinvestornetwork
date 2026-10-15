@@ -4,6 +4,7 @@ const config = require('../shared/config.js');
 const { requireRole, roundtableArrayContains } = require('../shared/auth.js');
 const { asyncRoute } = require('../shared/asyncRoute.js');
 const { sendInviteEmail, sendResetEmail } = require('../shared/email.js');
+const { validateProfileFields } = require('../shared/profileFields.js');
 const {
   listUsers,
   getUserById,
@@ -207,8 +208,11 @@ router.patch(
 
       updates = { roundtableIds: body.roundtableIds };
     } else {
-      updates = {};
-      ['firstName', 'lastName', 'phone', 'address', 'role', 'roundtableId', 'roundtableIds'].forEach((key) => {
+      const validated = validateProfileFields(body);
+      if (validated.error) return res.status(400).json({ error: validated.error });
+
+      updates = { ...validated.values };
+      ['role', 'roundtableId', 'roundtableIds'].forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(body, key)) updates[key] = body[key];
       });
       if (Object.prototype.hasOwnProperty.call(updates, 'role') && !VALID_ROLES.includes(updates.role)) {
@@ -310,13 +314,10 @@ router.patch(
       return res.status(404).json({ error: 'No profile to update for this session.' });
     }
 
-    const body = req.body || {};
-    const updates = {};
-    ['firstName', 'lastName', 'phone', 'address'].forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(body, key)) updates[key] = body[key];
-    });
+    const validated = validateProfileFields(req.body || {});
+    if (validated.error) return res.status(400).json({ error: validated.error });
 
-    const updated = await updateUser(req.session.userId, updates);
+    const updated = await updateUser(req.session.userId, validated.values);
     if (!updated) return res.status(404).json({ error: 'User not found.' });
     res.json({ success: true, user: updated });
   }, 'Unable to update your profile.', { verbose: true })
@@ -328,10 +329,9 @@ router.post(
   '/api/accept-invite',
   asyncRoute(async (req, res) => {
     const { token, password } = req.body || {};
-    const firstName = String((req.body || {}).firstName || '').trim();
-    const lastName = String((req.body || {}).lastName || '').trim();
-    const phone = String((req.body || {}).phone || '').trim();
-    const address = String((req.body || {}).address || '').trim();
+    const validated = validateProfileFields(req.body || {});
+    if (validated.error) return res.status(400).json({ error: validated.error });
+    const { firstName, lastName, phone, address } = validated.values;
     if (!token || !firstName || !lastName || !password || String(password).length < 8) {
       return res.status(400).json({ error: 'First name, last name, and a password of at least 8 characters are required.' });
     }
