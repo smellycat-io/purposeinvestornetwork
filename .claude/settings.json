@@ -1,5 +1,15 @@
 {
   "permissions": {
-    "allow": []
+    "allow": [],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push --force)",
+      "Bash(git push -f *)",
+      "Bash(git push -f)",
+      "Bash(git push * main)",
+      "Bash(git push * stage)",
+      "Bash(git push * refs/heads/main)",
+      "Bash(git push * refs/heads/stage)"
+    ]
   }
 }
