@@ -1,0 +1,29 @@
+#!/bin/sh
+# Rejects a push whose remote ref is refs/heads/main or refs/heads/stage.
+# Both only change through a GitHub PR (see .claude/CLAUDE.md's Git
+# Workflow) — a direct push bypasses review and CI entirely.
+#
+# Enabled via `git config core.hooksPath .githooks` (see package.json's
+# "prepare" script). Escape hatch for a deliberate exception:
+# ALLOW_PROTECTED_BRANCH=1 git push ...
+#
+# Git calls this hook with the remote name/URL as $1/$2 and feeds one line
+# per ref being pushed to stdin: "<local ref> <local sha1> <remote ref>
+# <remote sha1>".
+
+if [ "$ALLOW_PROTECTED_BRANCH" = "1" ]; then
+  exit 0
+fi
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main | refs/heads/stage)
+      echo "Refusing to push directly to '$remote_ref'." >&2
+      echo "main and stage only change through a GitHub PR." >&2
+      echo "(Set ALLOW_PROTECTED_BRANCH=1 to override, for a deliberate exception.)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+exit 0
