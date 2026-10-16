@@ -59,6 +59,11 @@ body:not([data-role="admin"]) .admin-only { display: none; }
 
 .profile-load-error.hidden { display: none; }
 
+#profile-readonly-context.hidden,
+#profile-bootstrap-note.hidden {
+  display: none;
+}
+
 /* GET /api/users/me failed — no role was ever confirmed, so every tab and
    panel stays hidden (not just the admin-only ones) rather than falling
    back to a guessed role's worth of controls. */

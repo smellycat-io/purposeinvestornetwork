@@ -139,8 +139,8 @@ aren't a queryable key, and invite/reset volume stays low regardless of Member c
 | `role` | `admin` \| `chair` \| `member` | defaults to `admin` when omitted — every account created before roles existed has no `role` field, and `routes/auth.js`'s login handler falls back to `'admin'` for exactly that reason |
 | `roundtableId` | string \| null | set for `chair` only (their one assigned roundtable); always `null` for `admin`/`member`, enforced in `createInvite` regardless of what's passed in |
 | `roundtableIds` | string[] | set for `member` only; always `[]` for `admin`/`chair`, same enforcement |
-| `firstName` / `lastName` | string \| null | set on invite acceptance, not at invite time |
-| `phone` / `address` | string \| null | |
+| `firstName` / `lastName` | string \| null | set on invite acceptance, not at invite time; cannot be blanked out once set (100-character cap) |
+| `phone` / `address` | string \| null | optional — a blank submission stores `null` rather than being rejected (phone: 40-character cap, address: 300) |
 | `passwordHash` | string | set on invite acceptance |
 | `status` | `pending` \| `active` | |
 | `inviteTokenHash` / `inviteTokenExpiresAt` | string \| null | cleared on acceptance |
@@ -153,6 +153,21 @@ raw item above — `passwordHash` and every token hash are stripped by construct
 two fields are renamed for clarity: `inviteTokenExpiresAt` becomes `inviteExpiresAt`,
 and `inviteSentAt` passes through unchanged. Neither is secret; the admin dashboard uses
 them to show invite status (Pending vs. Expired) and when an invite was last sent.
+
+**Profile field validation (`shared/profileFields.js`'s `validateProfileFields`).** One
+shared helper validates `firstName`/`lastName`/`phone`/`address` wherever a caller can
+set them — `PATCH /api/users/me` (self-service), `PATCH /api/admin/users/:id` (an
+Admin editing another user), and `POST /api/accept-invite` — so the three can't drift
+on what counts as valid. Each field is validated only when present in the request body
+(a partial self-edit submitting just `phone` isn't required to also submit the
+others): must be a string (400 otherwise), trimmed, and capped at a named length —
+100 characters for `firstName`/`lastName`, 40 for `phone`, 300 for `address` (400,
+naming the field and the limit, over any cap). `firstName`/`lastName` additionally
+can't be submitted blank; `phone`/`address` can — a blank submission stores `null`
+rather than being rejected, since there's a legitimate "clear this field" case for
+those two that doesn't exist for a name. `role`/`roundtableId`/`roundtableIds` are
+untouched by this helper and keep their existing handling on each route (silently
+ignored on the self-edit route, a permission boundary elsewhere).
 
 ### Sessions
 `AWS_SESSIONS_TABLE` — `express-session` store backed by DynamoDB (`db/sessions.js`),
@@ -478,8 +493,10 @@ hidden by default via `body:not([data-role="admin"]) .admin-only` until `admin.j
 confirms the role — fails closed, so there's nothing to flash while that confirmation
 is in flight. The bootstrap `ADMIN_USER`/`ADMIN_PASS` session sees exactly what an
 Admin sees (its `GET /api/users/me` result is `{ role: 'admin', bootstrap: true }`, same
-`role` the checks above key on) — the one difference is the header, which reads
-"Signed in as admin" instead of resolving a name.
+`role` the checks above key on) apart from two differences: the header reads "Signed in
+as admin" instead of resolving a name, and the Settings tab's My Profile section shows
+a one-sentence explanation instead of a form, since there's no Users-table record to
+prefill from or save to.
 
 | Area | Admin | Chair |
 |---|---|---|
@@ -488,8 +505,17 @@ Admin sees (its `GET /api/users/me` result is `{ role: 'admin', bootstrap: true 
 | Initiative/Investment roundtable picker | Every roundtable, freely chosen | Locked to their own roundtable, pre-checked |
 | New Post | Any type | Type locked to `update`; Initiative required, limited to their in-scope initiatives |
 | Investments & Events tab | Both sections | Investments only — Events column hidden, `GET /api/admin/events` not even requested |
-| Settings tab | Change Password | Change Password (identical — there's nothing else in this tab for either role yet) |
+| Settings tab | My Profile (bootstrap: explanation instead of a form) + Change Password | Same as Admin |
 | Users tab | Full edit, Level/Roundtable on invite, resend, send-reset, full delete | No edit form, no Level/Roundtable on invite (always Member on their own roundtable), resend, "Remove from roundtable" instead of delete |
+
+**Settings tab — My Profile.** Above Change Password, every Admin/Chair session (not
+the bootstrap session — see above) can edit their own `firstName`/`lastName`/`phone`/
+`address` via `PATCH /api/users/me`, validated the same way as everywhere else (see
+the Users table's Profile field validation note above). Read-only context above the
+form shows the session's email (with a note that it's the login and can't be changed
+here) and Level, plus Roundtable name for a Chair session. The submit button disables
+while the request is in flight; a success re-prefills the form from the response, a
+failure shows the server's exact error message.
 
 **Not yet implemented:**
 - The real Member-facing area. `GET /member` (`private/backend/member/member.html`,

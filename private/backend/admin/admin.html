@@ -430,6 +430,41 @@
 
   <section id="tab-settings" class="tab-panel">
     <div class="panel-header">
+      <h2>My Profile</h2>
+    </div>
+    <p class="muted" id="profile-readonly-context"></p>
+    <form id="profile-form" class="card form-card">
+      <div class="field-row">
+        <label class="field">
+          <span>First name</span>
+          <input type="text" id="profile-first-name" required>
+        </label>
+        <label class="field">
+          <span>Last name</span>
+          <input type="text" id="profile-last-name" required>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span>Phone</span>
+          <input type="text" id="profile-phone">
+        </label>
+        <label class="field">
+          <span>Address</span>
+          <input type="text" id="profile-address">
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-accent" id="profile-save-btn">Save Profile</button>
+      </div>
+    </form>
+    <!-- Shown instead of the form above for the bootstrap ADMIN_USER/
+         ADMIN_PASS session — it has no Users-table record, so there's no
+         profile to prefill or save. -->
+    <p class="muted hidden" id="profile-bootstrap-note">The bootstrap admin login has no
+      profile — set up an invited account via the Users tab to store personal details.</p>
+
+    <div class="panel-header">
       <h2>Change Password</h2>
     </div>
     <p class="muted">Updates your own login password immediately. Not available for the
