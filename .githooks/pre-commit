@@ -1,0 +1,26 @@
+#!/bin/sh
+# Rejects a commit made directly on main or stage. This repo's workflow is
+# feature branch -> stage (test) -> main (production) via GitHub PRs only
+# (see .claude/CLAUDE.md's Git Workflow) — a commit landing on main or
+# stage any other way skips that review path entirely.
+#
+# Enabled via `git config core.hooksPath .githooks` (see package.json's
+# "prepare" script). Escape hatch for a deliberate exception:
+# ALLOW_PROTECTED_BRANCH=1 git commit ...
+
+if [ "$ALLOW_PROTECTED_BRANCH" = "1" ]; then
+  exit 0
+fi
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+case "$branch" in
+  main|stage)
+    echo "Refusing to commit directly on '$branch'." >&2
+    echo "Create a feature/, fix/, refactor/, docs/, or chore/ branch first." >&2
+    echo "(Set ALLOW_PROTECTED_BRANCH=1 to override, for a deliberate exception.)" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

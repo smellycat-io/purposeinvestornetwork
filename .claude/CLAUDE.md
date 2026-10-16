@@ -250,14 +250,27 @@ a timer or against the whole repo at once.
 - Claude Code should create a new branch itself before starting new work if one isn't
   already checked out and appropriately named — don't build directly on `stage` or
   `main` even if not explicitly told to branch first
+- **Local guardrails enforce the rules above, not just document them.**
+  `.githooks/pre-commit` rejects a commit made directly on `main` or `stage`;
+  `.githooks/pre-push` rejects a push whose remote ref is `refs/heads/main` or
+  `refs/heads/stage` — both only change through a GitHub PR. `npm install`'s
+  `prepare` script enables them (`git config core.hooksPath .githooks`), guarded so
+  it no-ops rather than fails when there's no `.git` directory (CI, packaged Lambda
+  builds). `.claude/settings.json` separately denies `git push --force`/`-f` outright
+  and a `git push` whose command text names `main`/`stage` as the target — a
+  text-pattern match, not a true parse of the target ref, so it's a second layer
+  alongside the hook, not a replacement for it (a `git push` with no ref in the
+  command text at all, relying on a configured upstream, isn't text-matchable).
+  Both the hooks and the deny rules accept `ALLOW_PROTECTED_BRANCH=1` as a
+  deliberate, explicit exception.
 
 ## Reporting Back
 
-- **Final output goes in a copy-paste format.** When wrapping up a task — a summary of
-  what shipped, a PR description, exact commands or values Elise needs to act on
-  (AWS CLI commands, env var names/values, URLs) — present it as a fenced code block
-  rather than plain prose or GitHub-flavored markdown with inline bold/bullets. Prose
-  formatting doesn't paste cleanly outside GitHub; a code block does.
+- **Final output goes in a copy-paste format.** When wrapping up a task in the
+  terminal/chat — a summary of what shipped, exact commands or values Elise needs to
+  act on (AWS CLI commands, env var names/values, URLs) — present it as a fenced code
+  block rather than plain prose or GitHub-flavored markdown with inline bold/bullets.
+  Prose formatting doesn't paste cleanly outside GitHub; a code block does.
 - **Every PR description has a Stage Testing section.** A checklist, one GitHub task
   item (`- [ ] ...`) per test, so Elise can tick them off while testing on
   staging.purposeinvestornetwork.org.
@@ -273,8 +286,8 @@ a timer or against the whole repo at once.
   - If no staging pass is needed (docs or config only), the section says so in one
     line with the reason, and has no checklist.
   The PR description itself uses GitHub task-list markdown so the boxes render and can
-  be ticked. The chat-facing report stays a copy-paste code block and repeats the same
-  checklist.
+  be ticked. The checklist lives there only — the chat-facing report doesn't repeat it
+  (see the next bullet).
 - **The chat-facing report adds a mini summary and a prompt identifier — it doesn't
   replace the PR's own full summary.** When wrapping up a task in the terminal/chat,
   give a short summary of what shipped, then quote back the first few lines of the
