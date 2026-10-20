@@ -481,6 +481,22 @@ real unchecked-by-default checkbox, labeled with `composeConsentText(campaign.na
 value and `GET /api/roundtables/:slug` / `GET /api/initiatives/:slug`'s
 `interest.consentText`, so the two can't drift.
 
+**Export CSV (`admin/csvExport.js`'s `buildCampaignCsv`).** The Campaigns tab's Export
+CSV button downloads exactly the entries the "Show" filter (Everyone / Opted in only)
+currently displays — it reuses `filteredCampaignEntries`, the same function the
+on-screen table itself renders from, rather than a separate query or a second filter
+implementation. No new backend route: the export only ever has the entries the
+already role-gated `GET /api/admin/campaigns/:id/entries` call returned, so an Admin
+or a Chair can export whatever they can already see on screen, nothing more. Columns
+match the on-screen table for that campaign's type, in the same order, with one
+addition — an interest campaign's Consent text (the entry's stored `consentText`)
+goes right after Consent, a column the table itself doesn't show. The file is UTF-8
+with a leading BOM (so Excel renders accented characters correctly) and CRLF row
+endings. Every string cell — including a submitted name, message, phone, or address —
+runs through a formula-injection guard first: a cell starting with `=`, `+`, `-`, `@`,
+a tab, or a carriage return gets a leading apostrophe, so a value like `=1+1` opens in
+Excel/Sheets as the literal text `=1+1`, never as a formula.
+
 **Admin dashboard UI, per role.** The backend gates and scopes every route above; the
 dashboard (`private/backend/admin/`) only adapts what it shows on top of that — the
 server remains the enforcement either way. `admin.js`'s `isAdminSession()`/
@@ -532,7 +548,7 @@ failure shows the server's exact error message.
   including a logged-in Member — currently sees full `memberOnly` content; every viewer
   gets the same redacted preview or hidden item a logged-out visitor would. (The admin
   dashboard's own CRUD endpoints don't route through `access.js` and are unaffected.)
-- Campaigns tab: CSV export and bulk sending. The Copy Emails button (a
-  comma-separated, deduped, lowercased list via the clipboard) is the only
-  results-handling built so far — exporting to a file or sending a batch email
-  directly from the dashboard are both still manual, outside-the-app steps.
+- Campaigns tab: bulk sending. Copy Emails (a comma-separated, deduped, lowercased
+  list via the clipboard) and Export CSV cover reading results out of the dashboard;
+  sending a batch email to them directly from the dashboard is still a manual,
+  outside-the-app step.

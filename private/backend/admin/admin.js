@@ -498,6 +498,7 @@
     if (!campaign) {
       thead.innerHTML = '';
       tbody.innerHTML = '<tr><td class="muted">No campaign selected.</td></tr>';
+      updateExportCsvButtonState(false);
       return;
     }
 
@@ -513,6 +514,7 @@
     thead.innerHTML = `<tr>${columns.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr>`;
 
     const entries = filteredCampaignEntries(campaign);
+    updateExportCsvButtonState(entries.length > 0);
     if (!entries.length) {
       tbody.innerHTML = `<tr><td colspan="${columns.length}" class="muted">No entries match these filters.</td></tr>`;
       return;
@@ -638,6 +640,37 @@
     }
   }
 
+  function updateExportCsvButtonState(hasEntries) {
+    const btn = document.getElementById('campaign-export-csv-btn');
+    if (btn) btn.disabled = !hasEntries;
+  }
+
+  // Exports exactly what the on-screen table shows — filteredCampaignEntries
+  // is the one source of truth for "Everyone" vs. "Opted in only", not
+  // re-implemented here. No backend route or new gate: this only reads
+  // entries the already role-gated GET .../entries call returned.
+  function exportCampaignCsv() {
+    const campaign = selectedCampaign();
+    if (!campaign) return;
+    const entries = filteredCampaignEntries(campaign);
+    if (!entries.length) return;
+    try {
+      const csv = CsvExport.buildCampaignCsv(campaign, entries);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = CsvExport.campaignCsvFilename(campaign, new Date());
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      showToast(`Exported ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}.`);
+    } catch (err) {
+      showToast('Unable to export entries.', true);
+    }
+  }
+
   function initCampaignsTab() {
     document.getElementById('campaign-select').addEventListener('change', onCampaignSelected);
     document.getElementById('campaign-show-archived').addEventListener('change', loadCampaignsTab);
@@ -646,6 +679,7 @@
     document.getElementById('campaign-notify-on-entry').addEventListener('change', () => toggleCampaignField('notifyOnEntry', 'campaign-notify-on-entry'));
     document.getElementById('campaign-archived-toggle').addEventListener('change', () => toggleCampaignField('archived', 'campaign-archived-toggle'));
     document.getElementById('campaign-copy-emails-btn').addEventListener('click', copyFilteredEmails);
+    document.getElementById('campaign-export-csv-btn').addEventListener('click', exportCampaignCsv);
   }
 
   // --- Blog Posts ---
