@@ -46,8 +46,8 @@ erroring, so the site will run but show no content locally unless those are set.
 `npm install` also enables this repo's git hooks (`.githooks/`, via a `prepare` script
 running `git config core.hooksPath .githooks`): `pre-commit` rejects a commit made
 directly on `main` or `stage`, `pre-push` rejects a push whose target is `main` or
-`stage`. Both only change through a GitHub PR. For a deliberate exception, prefix the
-command with `ALLOW_PROTECTED_BRANCH=1`.
+`stage`. Both only change through a GitHub PR. For a deliberate exception, set
+`ALLOW_PROTECTED_BRANCH=1` yourself.
 
 The one exception is survey responses: they always write to a local JSON file
 (`private/backend/survey.db` in dev, `/tmp` in Lambda) in parallel with DynamoDB, so

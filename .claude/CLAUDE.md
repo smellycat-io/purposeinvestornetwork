@@ -259,10 +259,15 @@ a timer or against the whole repo at once.
   builds). `.claude/settings.json` separately denies `git push --force`/`-f` outright
   and a `git push` whose command text names `main`/`stage` as the target — a
   text-pattern match, not a true parse of the target ref, so it's a second layer
-  alongside the hook, not a replacement for it (a `git push` with no ref in the
-  command text at all, relying on a configured upstream, isn't text-matchable).
-  Both the hooks and the deny rules accept `ALLOW_PROTECTED_BRANCH=1` as a
-  deliberate, explicit exception.
+  alongside the hook, not a replacement for it. It matches command text only: a push
+  like `git push origin HEAD:main` isn't caught by it. The pre-push hook is the real
+  control for that — GitHub's own branch protection is the other one, currently
+  enabled on `main` (PR review required, force-push and deletion blocked) but not yet
+  on `stage`.
+  `ALLOW_PROTECTED_BRANCH=1` is read only by the hooks, not the deny rules — it's for
+  Elise to set by hand, for a deliberate exception. Claude Code never sets it, never
+  includes it in a command, and never suggests bypassing a hook. If a hook blocks a
+  commit or push, stop and tell Elise which branch rule blocked it.
 
 ## Reporting Back
 
