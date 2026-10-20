@@ -9,7 +9,8 @@
       "Bash(git push * main)",
       "Bash(git push * stage)",
       "Bash(git push * refs/heads/main)",
-      "Bash(git push * refs/heads/stage)"
+      "Bash(git push * refs/heads/stage)",
+      "Bash(*ALLOW_PROTECTED_BRANCH*)"
     ]
   }
 }
