@@ -95,10 +95,10 @@ validated server-side. A `/member` coming-soon page, with
 each role landing on its own home after login (Member → `/member`, Chair and Admin →
 `/admin`). Campaigns: durable results storage for the survey, newsletter, and
 membership waitlist, plus an always-on interest form on every Roundtable and Initiative
-page, with per-campaign results emails and copy-paste email lists in the admin
-dashboard. See `docs/DATA-MODEL.md`'s Role & Permission Model section for exactly how
-each role is scoped, including a per-role table of the admin dashboard's own tab and
-control visibility.
+page, with per-campaign results emails, copy-paste email lists, and a CSV export (with
+a formula-injection guard) in the admin dashboard. See `docs/DATA-MODEL.md`'s Role &
+Permission Model section for exactly how each role is scoped, including a per-role
+table of the admin dashboard's own tab and control visibility.
 
 **In progress**: the Member area is a coming-soon shell today — profile editing,
 education content, an events calendar, and a member news feed are still to come.
@@ -107,4 +107,4 @@ Role-aware `memberOnly` content visibility is also still open. See `docs/DATA-MO
 full detail.
 
 **Known gaps**: bulk email sending isn't built — Campaigns gives a copy-paste email
-list per campaign instead of sending from the dashboard directly.
+list and a CSV export per campaign instead of sending from the dashboard directly.
